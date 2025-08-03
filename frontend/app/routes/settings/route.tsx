@@ -4,7 +4,7 @@ import { TopNavigation } from "../_index/components/top-navigation/top-navigatio
 import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
 import { Tabs, Tab, Button } from "react-bootstrap"
-import { backendClient, type ConfigItem } from "~/clients/backend-client.server";
+import { backendClient } from "~/clients/backend-client.server";
 import { redirect } from "react-router";
 import { sessionStorage } from "~/auth/authentication.server";
 import { UsenetProviders } from "./usenet-providers/usenet-providers";
@@ -28,9 +28,14 @@ import { isWebdavSettingsUpdated, isWebdavSettingsValid, WebdavSettings } from "
 const defaultConfig = {
     "api.key": "",
     "api.categories": "",
+    "api.ensure-importable-video": "true",
     // Multi-provider configuration
     "usenet.providers.count": "0",
     "usenet.providers.primary": "0",
+    "usenet.host": "",
+    "usenet.port": "",
+    "usenet.use-ssl": "false",
+    "usenet.connections": "",
     "usenet.connections-per-stream": "",
     "webdav.user": "",
     "webdav.pass": "",
