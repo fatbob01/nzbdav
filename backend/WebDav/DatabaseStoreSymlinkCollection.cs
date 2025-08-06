@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using NWebDav.Server;
 using NWebDav.Server.Stores;
-using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
@@ -13,7 +12,6 @@ namespace NzbWebDAV.WebDav;
 public class DatabaseStoreSymlinkCollection(
     DavItem davDirectory,
     DavDatabaseClient dbClient,
-    ConfigManager configManager,
     string parentPath = ""
 ) : BaseStoreCollection
 {
@@ -106,7 +104,7 @@ public class DatabaseStoreSymlinkCollection(
         return davItem.Type switch
         {
             DavItem.ItemType.Directory =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager, RelativePath),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, RelativePath),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreSymlinkFile(davItem, RelativePath),
             DavItem.ItemType.RarFile =>
