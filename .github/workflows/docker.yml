@@ -1,0 +1,26 @@
+name: Build & Push nzbdav
+
+on:
+  push:
+    branches: [ main ]          # build anytime you push to main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3        # multi-arch helper
+      - uses: docker/setup-buildx-action@v3      # Buildx/BuildKit
+
+      - uses: docker/login-action@v3             # Docker Hub login
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: docker/build-push-action@v5        # build & push image
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64                # DS-920+ CPU arch
+          tags: fatbob01/nzbdav:latest
