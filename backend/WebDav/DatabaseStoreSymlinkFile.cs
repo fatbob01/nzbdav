@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using NWebDav.Server;
 using NWebDav.Server.Stores;
@@ -15,10 +16,21 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, string parentPath) : Base
     public override string UniqueKey => davFile.Id + ".rclonelink";
     public override long FileSize => ContentBytes.Length;
 
-    private string TargetPath =>
-        Path
-            .Combine("..", "..", DavItem.ContentFolder.Name, parentPath, davFile.Name)
-            .Replace('\\', '/');
+    private string TargetPath
+    {
+        get
+        {
+            var ups = Enumerable.Repeat(
+                "..",
+                parentPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1
+            );
+
+            return Path.Combine(
+                    ups.Concat(new[] { DavItem.ContentFolder.Name, parentPath, davFile.Name }).ToArray()
+                )
+                .Replace('\\', '/');
+        }
+    }
 
     private byte[] ContentBytes =>
         Encoding.UTF8.GetBytes(TargetPath);
