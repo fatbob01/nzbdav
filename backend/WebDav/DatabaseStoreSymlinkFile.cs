@@ -1,7 +1,6 @@
-﻿using System.Text;
+using System.Text;
 using NWebDav.Server;
 using NWebDav.Server.Stores;
-using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Utils;
 using NzbWebDAV.WebDav.Base;
@@ -10,14 +9,16 @@ using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
-public class DatabaseStoreSymlinkFile(DavItem davFile, string parentPath, ConfigManager configManager) : BaseStoreItem
+public class DatabaseStoreSymlinkFile(DavItem davFile, string parentPath) : BaseStoreItem
 {
     public override string Name => davFile.Name + ".rclonelink";
     public override string UniqueKey => davFile.Id + ".rclonelink";
     public override long FileSize => ContentBytes.Length;
 
     private string TargetPath =>
-        Path.Combine(configManager.GetRcloneMountDir(), DavItem.ContentFolder.Name, parentPath, davFile.Name);
+        Path
+            .Combine("..", "..", DavItem.ContentFolder.Name, parentPath, davFile.Name)
+            .Replace('\\', '/');
 
     private byte[] ContentBytes =>
         Encoding.UTF8.GetBytes(TargetPath);

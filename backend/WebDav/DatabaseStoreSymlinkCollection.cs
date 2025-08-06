@@ -108,9 +108,9 @@ public class DatabaseStoreSymlinkCollection(
             DavItem.ItemType.Directory =>
                 new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager, RelativePath),
             DavItem.ItemType.NzbFile =>
-                new DatabaseStoreSymlinkFile(davItem, RelativePath, configManager),
+                new DatabaseStoreSymlinkFile(davItem, RelativePath),
             DavItem.ItemType.RarFile =>
-                new DatabaseStoreSymlinkFile(davItem, RelativePath, configManager),
+                new DatabaseStoreSymlinkFile(davItem, RelativePath),
             _ => throw new ArgumentException("Unrecognized directory child type.")
         };
     }
