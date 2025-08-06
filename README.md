@@ -5,6 +5,8 @@
 
 # Nzb Dav
 
+> **This is a fork of [nzbdav-dev/nzbdav](https://github.com/nzbdav-dev/nzbdav) with additional enhancements and improvements.**
+
 NzbDav is a WebDAV server that allows you to mount and browse NZB documents as a virtual file system without downloading. It's designed to integrate with other media management tools, like Sonarr and Radarr, by providing a SABnzbd-compatible API. With it, you can build an infinite Plex or Jellyfin media library that streams directly from your usenet provider at maxed-out speeds, without using any storage space on your own server.
 
 Check the video below for a demo:
@@ -23,24 +25,34 @@ https://github.com/user-attachments/assets/d9f8caea-bb65-422e-831d-61d626d5b453
 
 # Getting Started
 
-The easiest way to get started is by using the official Docker image.
+The easiest way to get started is by using this fork's Docker image.
 
-To try it out, run the following command to pull and run the image with port `3000` exposed:
+## Using This Fork's Image
+
+To try it out, run the following command to pull and run the enhanced image with port `3000` exposed:
 
 ```bash
-docker run --rm -it -p 3000:3000 ghcr.io/nzbdav-dev/nzbdav:pre-alpha
+docker run --rm -it -p 3000:3000 ghcr.io/d3v1l1989/nzbdav:latest
 ```
 
 And if you would like to persist saved settings, attach a volume at `/config`
 
-```
+```bash
 mkdir -p $(pwd)/nzbdav && \
 docker run --rm -it \
   -v $(pwd)/nzbdav:/config \
   -e PUID=1000 \
   -e PGID=1000 \
   -p 3000:3000 \
-  ghcr.io/nzbdav-dev/nzbdav:pre-alpha
+  ghcr.io/d3v1l1989/nzbdav:latest
+```
+
+## Using Original Image
+
+Alternatively, you can use the original upstream image:
+
+```bash
+docker run --rm -it -p 3000:3000 ghcr.io/nzbdav-dev/nzbdav:pre-alpha
 ```
 After starting the container, be sure to navigate to the Settings page on the UI to finish setting up your usenet connection settings.
 
