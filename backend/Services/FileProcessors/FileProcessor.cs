@@ -17,7 +17,7 @@ public class FileProcessor(NzbFile nzbFile, UsenetProviderManager usenet, Cancel
         var firstSegment = nzbFile.Segments[0].MessageId.Value;
         var header = await usenet.GetSegmentYencHeaderAsync(firstSegment, default);
         var subjectFilename = nzbFile.GetSubjectFileName();
-        var fileName = Path.GetFileName(subjectFilename != "" ? subjectFilename : header.FileName);
+        var fileName = GetFileName(subjectFilename, header.FileName);
 
         return new Result()
         {
@@ -25,6 +25,21 @@ public class FileProcessor(NzbFile nzbFile, UsenetProviderManager usenet, Cancel
             FileName = fileName,
             FileSize = header.FileSize,
         };
+    }
+
+    private static string GetFileName(string subjectFilename, string headerFileName)
+    {
+        var subjectExt = Path.GetExtension(subjectFilename).ToLowerInvariant();
+        var headerExt = Path.GetExtension(headerFileName).ToLowerInvariant();
+
+        // Prefer .mkv files from subject over header
+        if (subjectExt == ".mkv" && headerExt != ".mkv")
+        {
+            return Path.GetFileName(subjectFilename);
+        }
+
+        // Use subject filename if available, otherwise fallback to header
+        return Path.GetFileName(subjectFilename != "" ? subjectFilename : headerFileName);
     }
 
     public new class Result : BaseProcessor.Result
