@@ -28,6 +28,11 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
     const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
     const [testingProvider, setTestingProvider] = useState<number | null>(null);
 
+    const connectionsPerStream = config["usenet.connections-per-stream"] || "";
+    const isConnectionsPerStreamValid =
+        isPositiveInteger(connectionsPerStream) &&
+        providers.every(p => Number(connectionsPerStream) <= Number(p.connections));
+
     // Load providers from config
     useEffect(() => {
         console.log("Loading providers from config:", config);
@@ -55,33 +60,35 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
 
     // Update config when providers change
     const updateConfig = useCallback((updatedProviders: Provider[]) => {
-        const newConfig = { ...config };
-        
-        // Clear old provider configs
-        Object.keys(newConfig).forEach(key => {
-            if (key.startsWith("usenet.provider.")) {
-                delete newConfig[key];
-            }
+        setNewConfig(prevConfig => {
+            const newConfig = { ...prevConfig };
+
+            // Clear old provider configs
+            Object.keys(newConfig).forEach(key => {
+                if (key.startsWith("usenet.provider.")) {
+                    delete newConfig[key];
+                }
+            });
+
+            // Set new provider count
+            newConfig["usenet.providers.count"] = updatedProviders.length.toString();
+
+            // Set provider configs
+            updatedProviders.forEach(provider => {
+                newConfig[`usenet.provider.${provider.index}.name`] = provider.name;
+                newConfig[`usenet.provider.${provider.index}.host`] = provider.host;
+                newConfig[`usenet.provider.${provider.index}.port`] = provider.port;
+                newConfig[`usenet.provider.${provider.index}.use-ssl`] = provider.useSsl.toString();
+                newConfig[`usenet.provider.${provider.index}.user`] = provider.user;
+                newConfig[`usenet.provider.${provider.index}.pass`] = provider.pass;
+                newConfig[`usenet.provider.${provider.index}.connections`] = provider.connections;
+                newConfig[`usenet.provider.${provider.index}.priority`] = provider.priority;
+                newConfig[`usenet.provider.${provider.index}.enabled`] = provider.enabled.toString();
+            });
+
+            return newConfig;
         });
-        
-        // Set new provider count
-        newConfig["usenet.providers.count"] = updatedProviders.length.toString();
-        
-        // Set provider configs
-        updatedProviders.forEach(provider => {
-            newConfig[`usenet.provider.${provider.index}.name`] = provider.name;
-            newConfig[`usenet.provider.${provider.index}.host`] = provider.host;
-            newConfig[`usenet.provider.${provider.index}.port`] = provider.port;
-            newConfig[`usenet.provider.${provider.index}.use-ssl`] = provider.useSsl.toString();
-            newConfig[`usenet.provider.${provider.index}.user`] = provider.user;
-            newConfig[`usenet.provider.${provider.index}.pass`] = provider.pass;
-            newConfig[`usenet.provider.${provider.index}.connections`] = provider.connections;
-            newConfig[`usenet.provider.${provider.index}.priority`] = provider.priority;
-            newConfig[`usenet.provider.${provider.index}.enabled`] = provider.enabled.toString();
-        });
-        
-        setNewConfig(newConfig);
-    }, [config, setNewConfig]);
+    }, [setNewConfig]);
 
     const addProvider = useCallback(() => {
         const newProvider: Provider = {
@@ -174,9 +181,12 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
 
     // Check if ready to save
     useEffect(() => {
-        const hasValidProviders = providers.length > 0 && providers.some(p => p.enabled);
+        const hasValidProviders =
+            providers.length > 0 &&
+            providers.some(p => p.enabled) &&
+            isConnectionsPerStreamValid;
         onReadyToSave && onReadyToSave(hasValidProviders);
-    }, [providers, onReadyToSave]);
+    }, [providers, isConnectionsPerStreamValid, onReadyToSave]);
 
     return (
         <div className={styles.container}>
@@ -186,6 +196,19 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
                     Add Provider
                 </Button>
             </div>
+
+            <Form.Group className="mb-3">
+                <Form.Label>Connections Per Stream</Form.Label>
+                <Form.Control
+                    type="text"
+                    value={connectionsPerStream}
+                    isInvalid={!isConnectionsPerStreamValid}
+                    onChange={e => setNewConfig({ ...config, "usenet.connections-per-stream": e.target.value })}
+                />
+                <Form.Control.Feedback type="invalid">
+                    Must be a positive integer and not exceed provider Max Connections
+                </Form.Control.Feedback>
+            </Form.Group>
 
             {providers.length === 0 ? (
                 <div className={styles.emptyState}>
@@ -370,4 +393,9 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
             </Modal>
         </div>
     );
+}
+
+function isPositiveInteger(value: string) {
+    const num = Number(value);
+    return Number.isInteger(num) && num > 0 && value.trim() === num.toString();
 }
