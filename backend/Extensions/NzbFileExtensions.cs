@@ -18,7 +18,8 @@ public static class NzbFileExtensions
         return GetFirstValidNonEmptyFilename(
             () => TryParseFilename1(file),
             () => TryParseFilename2(file),
-            () => TryParseFilename3(file)
+            () => TryParseFilename3(file),
+            () => TryParseFilename4(file)
         );
     }
 
@@ -42,16 +43,41 @@ public static class NzbFileExtensions
 
     private static string TryParseFilename3(this NzbFile file)
     {
-        // example: `file.mkv (1/0)`
-        var match = Regex.Match(file.Subject, @"^(.*?\.\w{2,6})\s+\(.*\)$");
+        // example: `Some release (file.mkv/1)`
+        var match = Regex.Match(
+            file.Subject,
+            @"\(([^()/]*\.(?:mkv|mp4|avi|wmv|mov|m4v|mpg|mpeg|ts|m2ts|flv))/\d+\)",
+            RegexOptions.IgnoreCase
+        );
+        return match.Success ? match.Groups[1].Value : "";
+    }
+
+    private static string TryParseFilename4(this NzbFile file)
+    {
+        // example: `file.mkv`
+        if (Regex.IsMatch(file.Subject, @"\(\d+/\d+\)")) return "";
+        var match = Regex.Match(
+            file.Subject,
+            @"([^\s\"]+\.(?:mkv|mp4|avi|wmv|mov|m4v|mpg|mpeg|ts|m2ts|flv))",
+            RegexOptions.IgnoreCase
+        );
         return match.Success ? match.Groups[1].Value : "";
     }
 
     private static string GetFirstValidNonEmptyFilename(params Func<string>[] funcs)
     {
         return funcs
-            .Select(x => x.Invoke())
-            .Where(x => x == Path.GetFileName(x))
-            .FirstOrDefault(x => x != "") ?? "";
+            .Select(x => x())
+            .FirstOrDefault(IsValidFilename) ?? "";
+    }
+
+    private static bool IsValidFilename(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+
+        var ext = Path.GetExtension(name);
+        if (ext.Length < 2 || ext.Length > 10) return false;
+
+        return name.IndexOfAny(Path.GetInvalidFileNameChars()) == -1;
     }
 }
