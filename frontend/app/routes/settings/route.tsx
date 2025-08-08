@@ -14,7 +14,8 @@ function isProvidersSettingsUpdated(config: Record<string, string>, newConfig: R
     // Check if provider count changed
     if (config["usenet.providers.count"] !== newConfig["usenet.providers.count"]) return true;
     if (config["usenet.providers.primary"] !== newConfig["usenet.providers.primary"]) return true;
-    
+    if (config["usenet.connections-per-stream"] !== newConfig["usenet.connections-per-stream"]) return true;
+
     // Check all provider-specific keys
     const allKeys = Object.keys(newConfig);
     const providerKeys = allKeys.filter(key => key.startsWith("usenet.provider."));
