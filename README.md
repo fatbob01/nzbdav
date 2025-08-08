@@ -47,6 +47,68 @@ docker run --rm -it \
   ghcr.io/d3v1l1989/nzbdav:latest
 ```
 
+## Docker Compose Setup
+
+For a complete setup with RClone integration, you can use this Docker Compose configuration:
+
+```yaml
+services:
+  nzbdav:
+    restart: unless-stopped 
+    container_name: nzbdav 
+    image: ghcr.io/d3v1l1989/nzbdav:latest
+    hostname: nzbdav 
+    environment: 
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - CONFIG_PATH=/config
+      - FRONTEND_BACKEND_API_KEY=YourAPIkey(user generated)
+      - WEBDAV_USER=user
+      - WEBDAV_PASS=password
+      - MOUNT_DIR=/mnt/nzbdav
+      - LOG_LEVEL=Information
+    networks: 
+      - YourNetwork
+    volumes: 
+      - /opt/nzbdav:/config
+      - /etc/localtime:/etc/localtime:ro
+
+  nzbdav-rclone:
+    image: rclone/rclone:latest
+    container_name: nzbdav-webdav
+    restart: unless-stopped
+    command: |
+      mount nzb-dav: /data/nzbdav 
+      --allow-other 
+      --allow-non-empty 
+      --vfs-cache-mode=off 
+      --buffer-size=1024
+      --dir-cache-time=1s 
+      --links
+      --uid=1000
+      --gid=1000
+      --use-cookies
+      --allow-other
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /mnt/nzbdav:/data/nzbdav:rshared
+      - ./rclone.conf:/config/rclone/rclone.conf:ro
+    networks:
+      - YourNetwork
+    depends_on:
+      - nzbdav
+
+networks: 
+  YourNetwork:
+    external: true
+```
+
 ## Using Original Image
 
 Alternatively, you can use the original upstream image:
