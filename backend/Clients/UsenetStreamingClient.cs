@@ -16,13 +16,14 @@ public class UsenetStreamingClient
 
     public UsenetStreamingClient(ConfigManager configManager)
     {
-        // get connection settings from config-manager
-        var host = configManager.GetConfigValue("usenet.host") ?? string.Empty;
-        var port = int.Parse(configManager.GetConfigValue("usenet.port") ?? "119");
-        var useSsl = bool.Parse(configManager.GetConfigValue("usenet.use-ssl") ?? "false");
-        var user = configManager.GetConfigValue("usenet.user") ?? string.Empty;
-        var pass = configManager.GetConfigValue("usenet.pass") ?? string.Empty;
-        var connections = int.Parse(configManager.GetConfigValue("usenet.connections") ?? "10");
+        // Use primary provider configuration
+        var providerIndex = configManager.GetPrimaryProviderIndex();
+        var host = configManager.GetProviderConfigValue(providerIndex, "host") ?? string.Empty;
+        var port = int.Parse(configManager.GetProviderConfigValue(providerIndex, "port") ?? "119");
+        var useSsl = bool.Parse(configManager.GetProviderConfigValue(providerIndex, "use-ssl") ?? "false");
+        var user = configManager.GetProviderConfigValue(providerIndex, "user") ?? string.Empty;
+        var pass = configManager.GetProviderConfigValue(providerIndex, "pass") ?? string.Empty;
+        var connections = int.Parse(configManager.GetProviderConfigValue(providerIndex, "connections") ?? "10");
 
         // initialize the nntp-client
         var createNewConnection = (CancellationToken ct) => CreateNewConnection(host, port, useSsl, user, pass, ct);
@@ -34,21 +35,21 @@ public class UsenetStreamingClient
         // when config changes, update the connection-pool
         configManager.OnConfigChanged += (_, configEventArgs) =>
         {
+            providerIndex = configManager.GetPrimaryProviderIndex();
+            var prefix = $"usenet.provider.{providerIndex}.";
+
             // if unrelated config changed, do nothing
-            if (!configEventArgs.ChangedConfig.ContainsKey("usenet.host") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.port") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.use-ssl") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.user") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.pass") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.connections")) return;
+            var relevantChange = configEventArgs.ChangedConfig.Keys.Any(key =>
+                key == "usenet.providers.primary" || key.StartsWith(prefix));
+            if (!relevantChange) return;
 
             // update the connection-pool according to the new config
-            var connectionCount = int.Parse(configEventArgs.NewConfig["usenet.connections"]);
-            var newHost = configEventArgs.NewConfig["usenet.host"];
-            var newPort = int.Parse(configEventArgs.NewConfig["usenet.port"]);
-            var newUseSsl = bool.Parse(configEventArgs.NewConfig.GetValueOrDefault("usenet.use-ssl", "false"));
-            var newUser = configEventArgs.NewConfig["usenet.user"];
-            var newPass = configEventArgs.NewConfig["usenet.pass"];
+            var connectionCount = int.Parse(configManager.GetProviderConfigValue(providerIndex, "connections") ?? "10");
+            var newHost = configManager.GetProviderConfigValue(providerIndex, "host") ?? string.Empty;
+            var newPort = int.Parse(configManager.GetProviderConfigValue(providerIndex, "port") ?? "119");
+            var newUseSsl = bool.Parse(configManager.GetProviderConfigValue(providerIndex, "use-ssl") ?? "false");
+            var newUser = configManager.GetProviderConfigValue(providerIndex, "user") ?? string.Empty;
+            var newPass = configManager.GetProviderConfigValue(providerIndex, "pass") ?? string.Empty;
             multiConnectionClient.UpdateConnectionPool(new(connectionCount, cancellationToken =>
                 CreateNewConnection(newHost, newPort, newUseSsl, newUser, newPass, cancellationToken)));
         };

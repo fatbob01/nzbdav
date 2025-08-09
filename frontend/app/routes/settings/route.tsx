@@ -199,8 +199,10 @@ function getChangedConfig(
     // Check changes in provider-specific keys
     const allKeys = new Set([...Object.keys(config), ...Object.keys(newConfig)]);
     for (const key of allKeys) {
-        if (key.startsWith("usenet.provider.") && config[key] !== newConfig[key]) {
-            changedConfig[key] = newConfig[key];
+        if (key.startsWith("usenet.provider.")) {
+            if (key.endsWith(".connections") || config[key] !== newConfig[key]) {
+                changedConfig[key] = newConfig[key];
+            }
         }
     }
     
