@@ -32,6 +32,7 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
     const isConnectionsPerStreamValid =
         isPositiveInteger(connectionsPerStream) &&
         providers.every(p => Number(connectionsPerStream) <= Number(p.connections));
+    const areProviderConnectionsValid = providers.every(p => isPositiveInteger(p.connections));
 
     // Load providers from config
     useEffect(() => {
@@ -49,7 +50,7 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
                 useSsl: config[`usenet.provider.${i}.use-ssl`] === "true",
                 user: config[`usenet.provider.${i}.user`] || "",
                 pass: config[`usenet.provider.${i}.pass`] || "",
-                connections: config[`usenet.provider.${i}.connections`] || "10",
+                connections: config[`usenet.provider.${i}.connections`] || "",
                 priority: config[`usenet.provider.${i}.priority`] || i.toString(),
                 enabled: config[`usenet.provider.${i}.enabled`] !== "false"
             });
@@ -121,7 +122,7 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
     }, [providers, updateConfig]);
 
     const saveProvider = useCallback(() => {
-        if (!editingProvider) return;
+        if (!editingProvider || !isPositiveInteger(editingProvider.connections)) return;
         
         const updatedProviders = [...providers];
         const existingIndex = updatedProviders.findIndex(p => p.index === editingProvider.index);
@@ -184,9 +185,10 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
         const hasValidProviders =
             providers.length > 0 &&
             providers.some(p => p.enabled) &&
-            isConnectionsPerStreamValid;
+            isConnectionsPerStreamValid &&
+            areProviderConnectionsValid;
         onReadyToSave && onReadyToSave(hasValidProviders);
-    }, [providers, isConnectionsPerStreamValid, onReadyToSave]);
+    }, [providers, isConnectionsPerStreamValid, areProviderConnectionsValid, onReadyToSave]);
 
     return (
         <div className={styles.container}>
@@ -357,8 +359,12 @@ export function UsenetProviders({ config, setNewConfig, onReadyToSave }: UsenetP
                                 <Form.Control
                                     type="text"
                                     value={editingProvider.connections}
+                                    isInvalid={!isPositiveInteger(editingProvider.connections)}
                                     onChange={e => setEditingProvider({...editingProvider, connections: e.target.value})}
                                 />
+                                <Form.Control.Feedback type="invalid">
+                                    Must be a positive integer
+                                </Form.Control.Feedback>
                             </Form.Group>
 
                             <Form.Group className="mb-3">
