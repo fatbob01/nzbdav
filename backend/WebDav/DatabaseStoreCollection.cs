@@ -100,7 +100,7 @@ public class DatabaseStoreCollection(
             DavItem.ItemType.Directory =>
                 new DatabaseStoreCollection(davItem, dbClient, configManager, usenetClient, queueManager),
             DavItem.ItemType.SymlinkRoot =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreNzbFile(davItem, dbClient, usenetClient, configManager),
             DavItem.ItemType.RarFile =>

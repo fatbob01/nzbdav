@@ -31,17 +31,19 @@ To try it out, run the following command to pull and run the image with port `30
 docker run --rm -it -p 3000:3000 ghcr.io/nzbdav-dev/nzbdav:pre-alpha
 ```
 
-And if you would like to persist saved settings, attach a volume at `/config`
+And if you would like to persist saved settings, attach a volume at `/config` and bind-mount a folder for generated symlinks at `/completed-symlinks`.
 
 ```
-mkdir -p $(pwd)/nzbdav && \
+mkdir -p $(pwd)/nzbdav $(pwd)/completed-symlinks && \
 docker run --rm -it \
   -v $(pwd)/nzbdav:/config \
+  -v $(pwd)/completed-symlinks:/completed-symlinks \
   -e PUID=1000 \
   -e PGID=1000 \
   -p 3000:3000 \
   ghcr.io/nzbdav-dev/nzbdav:pre-alpha
 ```
+By default, symlinks are written to `/completed-symlinks`. You can change this inside the container by setting the `SYMLINK_MIRROR_DIR` environment variable and updating the volume mount accordingly.
 After starting the container, be sure to navigate to the Settings page on the UI to finish setting up your usenet connection settings.
 
 <p align="center">
@@ -102,8 +104,8 @@ Once you have the webdav mounted onto your filesystem (e.g. accessible at `/mnt/
 * Radar will send an *.nzb to NZB-Dav to "download"
 * NZB-Dav will mount the nzb onto the webdav without actually downloading it.
 * RClone will make the nzb contents available to your filesystem by streaming, without using any storage space on your server.
-* NZB-Dav will tell Radarr that the "download" has completed within the `/mnt/nzbdav/completed-symlinks` folder.
-* Radarr will grab the symlinks from `/mnt/nzbdav/completed-symlinks` and will move them to wherever you have your media library.
+* NZB-Dav will tell Radarr that the "download" has completed within the `/completed-symlinks` folder (or your custom `SYMLINK_MIRROR_DIR`).
+* Radarr will grab the symlinks from this folder and will move them to wherever you have your media library.
 * The symlinks always point to the `/mnt/nzbdav/completed` folder which contain the streamable content.
 * Plex accesses one of the symlinks from your media library, it will automatically fetch and stream it from the mounted webdav.
 
