@@ -56,6 +56,13 @@ public class ConfigManager
                ?? "/tmp";
     }
 
+    public string GetSymlinkMirrorDir()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("symlink.mirror-dir"))
+               ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("SYMLINK_MIRROR_DIR"))
+               ?? "/completed-symlinks";
+    }
+
     public string GetApiKey()
     {
         return StringUtil.EmptyToNull(GetConfigValue("api.key"))
