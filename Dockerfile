@@ -11,24 +11,11 @@ RUN npm prune --omit=dev
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS backend-build
 WORKDIR /backend
 COPY ./backend ./
-# Accept build-time architecture as ARG (e.g., amd64 or arm64)
+# Accept build-time architecture as ARG (e.g., x64 or arm64)
 ARG TARGETARCH
-
-# Map Docker TARGETARCH to .NET RID using case statement
-RUN case ${TARGETARCH} in \
-      "amd64") RID_ARCH=x64 ;; \
-      "arm64") RID_ARCH=arm64 ;; \
-      *) RID_ARCH=${TARGETARCH} ;; \
-    esac && \
-    echo "Building for TARGETARCH: ${TARGETARCH} -> .NET RID: linux-musl-${RID_ARCH}" && \
-    dotnet restore -r linux-musl-${RID_ARCH}
-
-RUN case ${TARGETARCH} in \
-      "amd64") RID_ARCH=x64 ;; \
-      "arm64") RID_ARCH=arm64 ;; \
-      *) RID_ARCH=${TARGETARCH} ;; \
-    esac && \
-    dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
+RUN dotnet restore
+# Remove the -r flag to create framework-dependent deployment
+RUN dotnet publish -c Release -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
