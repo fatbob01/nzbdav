@@ -12,8 +12,8 @@ namespace NzbWebDAV.WebDav;
 
 public class DatabaseStoreSymlinkFile(DavItem davFile, string parentPath) : BaseStoreItem
 {
-    public override string Name => davFile.Name + ".rclonelink";
-    public override string UniqueKey => davFile.Id + ".rclonelink";
+    public override string Name => davFile.Name + ".symlink";
+    public override string UniqueKey => davFile.Id + ".symlink";
     public override long FileSize => ContentBytes.Length;
 
     private string TargetPath

@@ -64,7 +64,7 @@ public class ListWebdavDirectoryController(DatabaseStore store) : BaseApiControl
     {
         var extension = Path.GetExtension(item).ToLower();
         return extension == ".mkv" ? "video/webm"
-            : extension == ".rclonelink" ? "text/plain"
+            : extension == ".symlink" ? "text/plain"
             : extension == ".nfo" ? "text/plain"
             : MimeTypeProvider.TryGetContentType(Path.GetFileName(item), out var mimeType) ? mimeType
             : "application/octet-stream";
