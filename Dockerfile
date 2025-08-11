@@ -19,7 +19,11 @@ COPY ./backend ./
 # Accept build-time architecture as ARG (e.g., x64 or arm64)
 ARG TARGETARCH
 RUN dotnet restore
-RUN dotnet publish -c Release -r linux-musl-${TARGETARCH} -o ./publish
+RUN RID_ARCH=${TARGETARCH}; \
+    if [ "${RID_ARCH}" = "amd64" ]; then \
+        RID_ARCH=x64; \
+    fi; \
+    dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
