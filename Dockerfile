@@ -16,14 +16,18 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS backend-build
 WORKDIR /backend
 COPY ./backend ./
 
-# Accept build-time architecture as ARG (e.g., x64 or arm64)
-ARG TARGETARCH
-RUN dotnet restore
-RUN RID_ARCH=${TARGETARCH}; \
+# Accept build-time platform as ARG (e.g., linux/amd64)
+ARG TARGETPLATFORM
+RUN RID_ARCH=$(echo ${TARGETPLATFORM} | cut -d/ -f2); \
     if [ "${RID_ARCH}" = "amd64" ]; then \
         RID_ARCH=x64; \
     fi; \
-    dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
+    dotnet restore --runtime linux-musl-${RID_ARCH}
+RUN RID_ARCH=$(echo ${TARGETPLATFORM} | cut -d/ -f2); \
+    if [ "${RID_ARCH}" = "amd64" ]; then \
+        RID_ARCH=x64; \
+    fi; \
+    dotnet publish -c Release --runtime linux-musl-${RID_ARCH} -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
