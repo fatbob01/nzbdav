@@ -56,7 +56,7 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
     protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
     {
         if (DeletedFiles.IsDeleted(request.Name)) return null;
-        var name = Regex.Replace(request.Name, @"\.rclonelink$", "");
+        var name = Regex.Replace(request.Name, @"\.symlink$", "");
         var child = await dbClient.GetDirectoryChildAsync(TargetId, name, request.CancellationToken);
         if (child is null) return null;
         return GetItem(child);
@@ -148,12 +148,11 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
             return;
         }
 
-        var dir = Path.Join(MirrorRoot, RelativePath, item.Name);
-        Directory.CreateDirectory(dir);
-        var filePath = Path.Join(dir, item.Name + ".rclonelink");
+        Directory.CreateDirectory(Path.Join(MirrorRoot, RelativePath));
+        var filePath = Path.Join(MirrorRoot, RelativePath, item.Name + ".symlink");
         var ups = Enumerable.Repeat(
             "..",
-            RelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 2
+            RelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1
         );
         var target = Path.Combine(
                 ups.Concat(new[] { DavItem.ContentFolder.Name, RelativePath, item.Name }).ToArray()
