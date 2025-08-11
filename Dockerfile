@@ -1,33 +1,28 @@
 # syntax=docker/dockerfile:1.4
-
 # -------- Stage 1: Build frontend --------
 FROM --platform=$BUILDPLATFORM node:alpine AS frontend-build
-
 WORKDIR /frontend
 COPY ./frontend ./
-
 RUN npm install
 RUN npm run build
 RUN npm prune --omit=dev
 
 # -------- Stage 2: Build backend --------
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS backend-build
-
 WORKDIR /backend
 COPY ./backend ./
-
-# Accept build-time architecture as ARG
+# Accept build-time architecture as ARG (e.g., amd64 or arm64)
 ARG TARGETARCH
-RUN RID_ARCH=${TARGETARCH}; \
-    if [ "${RID_ARCH}" = "amd64" ]; then \
-        RID_ARCH=x64; \
-    fi; \
+
+# Map Docker TARGETARCH to .NET RID
+RUN RID_ARCH=${TARGETARCH} && \
+    if [ "${RID_ARCH}" = "amd64" ]; then RID_ARCH=x64; fi && \
+    echo "Building for architecture: ${TARGETARCH} -> RID: linux-musl-${RID_ARCH}" && \
     dotnet restore -r linux-musl-${RID_ARCH} && \
     dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
-
 WORKDIR /app
 
 # Prepare environment
@@ -46,8 +41,7 @@ COPY --from=backend-build /backend/publish ./backend
 # Entry and runtime setup
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
 EXPOSE 3000
-ENV NODE_ENV=production
 
+ENV NODE_ENV=production
 CMD ["/entrypoint.sh"]
