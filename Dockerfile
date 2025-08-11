@@ -42,3 +42,6 @@ COPY --from=backend-build /backend/publish ./backend
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 EXPOSE 3000
+
+ENV NODE_ENV=production
+CMD ["/entrypoint.sh"]
