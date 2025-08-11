@@ -14,11 +14,20 @@ COPY ./backend ./
 # Accept build-time architecture as ARG (e.g., amd64 or arm64)
 ARG TARGETARCH
 
-# Map Docker TARGETARCH to .NET RID
-RUN RID_ARCH=${TARGETARCH} && \
-    if [ "${RID_ARCH}" = "amd64" ]; then RID_ARCH=x64; fi && \
-    echo "Building for architecture: ${TARGETARCH} -> RID: linux-musl-${RID_ARCH}" && \
-    dotnet restore -r linux-musl-${RID_ARCH} && \
+# Map Docker TARGETARCH to .NET RID using case statement
+RUN case ${TARGETARCH} in \
+      "amd64") RID_ARCH=x64 ;; \
+      "arm64") RID_ARCH=arm64 ;; \
+      *) RID_ARCH=${TARGETARCH} ;; \
+    esac && \
+    echo "Building for TARGETARCH: ${TARGETARCH} -> .NET RID: linux-musl-${RID_ARCH}" && \
+    dotnet restore -r linux-musl-${RID_ARCH}
+
+RUN case ${TARGETARCH} in \
+      "amd64") RID_ARCH=x64 ;; \
+      "arm64") RID_ARCH=arm64 ;; \
+      *) RID_ARCH=${TARGETARCH} ;; \
+    esac && \
     dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
