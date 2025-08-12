@@ -148,17 +148,11 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
             return;
         }
 
-        var dir = Path.Join(MirrorRoot, RelativePath, item.Name);
+        var dir = Path.Join(MirrorRoot, RelativePath);
         Directory.CreateDirectory(dir);
         var filePath = Path.Join(dir, item.Name + ".rclonelink");
-        var ups = Enumerable.Repeat(
-            "..",
-            RelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 2
-        );
-        var target = Path.Combine(
-                ups.Concat(new[] { DavItem.ContentFolder.Name, RelativePath, item.Name }).ToArray()
-            )
-            .Replace('\\', '/');
+        var ups = Enumerable.Repeat("..", RelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1);
+        var target = Path.Combine(ups.Concat(new[] { DavItem.ContentFolder.Name, RelativePath, item.Name }).ToArray()).Replace('\\', '/');
         File.WriteAllText(filePath, target);
     }
 
