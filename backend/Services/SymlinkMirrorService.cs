@@ -28,7 +28,7 @@ public class SymlinkMirrorService(
             segments.Add(current.Name);
         }
         segments.Reverse();
-        return Path.Join(segments.ToArray());
+        return Path.Join(segments);
     }
 
     private void MirrorItem(DavItem item, string relativePath)
