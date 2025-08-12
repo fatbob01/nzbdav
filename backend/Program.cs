@@ -100,8 +100,8 @@ class Program
                 var path = httpContext.Request.Path.Value?.ToLower() ?? "";
                 var method = httpContext.Request.Method;
                 
-                if (method == "PROPFIND" ||
-                    (method == "GET" && (path.Contains("/api") || path.Contains(".symlink"))))
+                if (method == "PROPFIND" || 
+                    (method == "GET" && (path.Contains("/api") || path.Contains(".rclonelink"))))
                 {
                     return LogEventLevel.Debug;
                 }
