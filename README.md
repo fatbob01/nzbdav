@@ -81,7 +81,7 @@ This setup disables Rclone's caching and streams directly, since the  end-client
 --allow-other
 ```
 
-* The `--links` setting in RClone is important. It allows *.symlink files within the webdav to be translated to symlinks when mounted onto your filesystem.
+* The `--links` setting in RClone is important. It allows *.rclonelink files within the webdav to be translated to symlinks when mounted onto your filesystem.
 
     > NOTE: Be sure to use an updated version of rclone that supports the `--links` argument.
     > * Version `v1.70.3` has been known to support it.
