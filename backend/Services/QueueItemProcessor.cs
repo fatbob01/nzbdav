@@ -140,11 +140,10 @@ public class QueueItemProcessor(
         var fileProcessingResults = await TaskUtil.WhenAllOrError(fileProcessingTasks, progress);
 
         // update the database
-        DavItem? mountFolder = null;
         await MarkQueueItemCompleted(startTime, error: null, () =>
         {
             var categoryFolder = GetOrCreateCategoryFolder();
-            mountFolder = CreateMountFolder(categoryFolder);
+            var mountFolder = CreateMountFolder(categoryFolder);
             new RarAggregator(dbClient, mountFolder).UpdateDatabase(fileProcessingResults);
             new FileAggregator(dbClient, mountFolder).UpdateDatabase(fileProcessingResults);
 
@@ -152,9 +151,6 @@ public class QueueItemProcessor(
             if (configManager.IsEnsureImportableVideoEnabled())
                 new EnsureImportableVideoValidator(dbClient).ThrowIfValidationFails();
         });
-
-        if (mountFolder is not null)
-            new SymlinkMirrorService(dbClient, configManager).Mirror(mountFolder);
     }
 
     private BaseProcessor? GetFileProcessor(NzbFile nzbFile)
