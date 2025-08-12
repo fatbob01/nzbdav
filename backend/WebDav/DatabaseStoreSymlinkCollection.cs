@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using NWebDav.Server;
 using NWebDav.Server.Stores;
@@ -6,46 +6,20 @@ using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
 using NzbWebDAV.WebDav.Requests;
-using NzbWebDAV.Config;
-using System.IO;
-using System.Linq;
 
 namespace NzbWebDAV.WebDav;
 
-public class DatabaseStoreSymlinkCollection : BaseStoreCollection
+public class DatabaseStoreSymlinkCollection(
+    DavItem davDirectory,
+    DavDatabaseClient dbClient,
+    string parentPath = ""
+) : BaseStoreCollection
 {
-    private readonly DavItem davDirectory;
-    private readonly DavDatabaseClient dbClient;
-    private readonly ConfigManager configManager;
-    private readonly string parentPath;
-
-    public DatabaseStoreSymlinkCollection(
-        DavItem davDirectory,
-        DavDatabaseClient dbClient,
-        ConfigManager configManager,
-        string parentPath = ""
-    )
-    {
-        this.davDirectory = davDirectory;
-        this.dbClient = dbClient;
-        this.configManager = configManager;
-        this.parentPath = parentPath;
-
-        if (davDirectory.Id == DavItem.SymlinkFolder.Id && string.IsNullOrEmpty(parentPath))
-        {
-            foreach (var folder in new[] { "movies", "tv", "uncategorized" })
-            {
-                Directory.CreateDirectory(Path.Join(MirrorRoot, folder));
-            }
-        }
-    }
-
     public override string Name => davDirectory.Name;
     public override string UniqueKey => davDirectory.Id.ToString();
 
     private string RelativePath => davDirectory.Id == DavItem.SymlinkFolder.Id ? "" : Path.Join(parentPath, Name);
     private Guid TargetId => davDirectory.Id == DavItem.SymlinkFolder.Id ? DavItem.ContentFolder.Id : davDirectory.Id;
-    private string MirrorRoot => configManager.GetSymlinkMirrorDir();
     private DeletedFileManager DeletedFiles => new(davDirectory.Id);
 
     protected override Task<StoreItemResult> CopyAsync(CopyRequest request)
@@ -66,7 +40,7 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
     {
         return (await dbClient.GetDirectoryChildrenAsync(TargetId, cancellationToken))
             .Select(GetItem)
-            .Where(x => !DeletedFiles.IsDeleted(x.Name))
+            .Where(x => !DeletedFiles.IsDeleted(x.Name)) // must appear after Select(GetItem) for correct Name.
             .ToArray();
     }
 
@@ -127,11 +101,10 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
 
     private IStoreItem GetItem(DavItem davItem)
     {
-        EnsureMirror(davItem);
         return davItem.Type switch
         {
             DavItem.ItemType.Directory =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager, RelativePath),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, RelativePath),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreSymlinkFile(davItem, RelativePath),
             DavItem.ItemType.RarFile =>
@@ -140,32 +113,9 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
         };
     }
 
-    private void EnsureMirror(DavItem item)
-    {
-        var relative = Path.Join(parentPath, item.Name);
-        if (item.Type == DavItem.ItemType.Directory || item.Type == DavItem.ItemType.SymlinkRoot)
-        {
-            Directory.CreateDirectory(Path.Join(MirrorRoot, relative));
-            return;
-        }
-
-        var dir = Path.Join(MirrorRoot, parentPath);
-        Directory.CreateDirectory(dir);
-        var filePath = Path.Join(dir, item.Name + ".rclonelink");
-        var ups = Enumerable.Repeat("..", parentPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1);
-        var target = Path.Combine(ups.Concat(new[] { DavItem.ContentFolder.Name, parentPath, item.Name }).ToArray()).Replace('\\', '/');
-        File.WriteAllText(filePath, target);
-    }
-
-    private class DeletedFileManager
+    private class DeletedFileManager(Guid directoryId)
     {
         private static readonly MemoryCache DeletedFiles = new(new MemoryCacheOptions());
-        private readonly Guid directoryId;
-
-        public DeletedFileManager(Guid directoryId)
-        {
-            this.directoryId = directoryId;
-        }
 
         public void AddDeletedFile(string filename, TimeSpan? expiry = null)
         {

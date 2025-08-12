@@ -36,7 +36,8 @@ public class GetHistoryController(
                 SizeInBytes = historyItem.TotalSegmentBytes,
                 DownloadPath = Path.Join(new[]
                 {
-                    configManager.GetSymlinkMirrorDir(),
+                    configManager.GetRcloneMountDir(),
+                    DavItem.SymlinkFolder.Name,
                     historyItem.Category,
                     historyItem.JobName
                 }),
