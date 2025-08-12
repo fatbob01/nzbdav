@@ -142,17 +142,18 @@ public class DatabaseStoreSymlinkCollection : BaseStoreCollection
 
     private void EnsureMirror(DavItem item)
     {
+        var relative = Path.Join(parentPath, item.Name);
         if (item.Type == DavItem.ItemType.Directory || item.Type == DavItem.ItemType.SymlinkRoot)
         {
-            Directory.CreateDirectory(Path.Join(MirrorRoot, RelativePath, item.Name));
+            Directory.CreateDirectory(Path.Join(MirrorRoot, relative));
             return;
         }
 
-        var dir = Path.Join(MirrorRoot, RelativePath);
+        var dir = Path.Join(MirrorRoot, parentPath);
         Directory.CreateDirectory(dir);
         var filePath = Path.Join(dir, item.Name + ".rclonelink");
-        var ups = Enumerable.Repeat("..", RelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1);
-        var target = Path.Combine(ups.Concat(new[] { DavItem.ContentFolder.Name, RelativePath, item.Name }).ToArray()).Replace('\\', '/');
+        var ups = Enumerable.Repeat("..", parentPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1);
+        var target = Path.Combine(ups.Concat(new[] { DavItem.ContentFolder.Name, parentPath, item.Name }).ToArray()).Replace('\\', '/');
         File.WriteAllText(filePath, target);
     }
 
