@@ -129,7 +129,11 @@ public class QueueItemProcessor(
         var nzb = await NzbDocument.LoadAsync(stream);
 
         // start the file processing tasks
-        var fileProcessingTasks = nzb.Files
+        var nzbFiles = nzb.Files
+            .Where(x => x.Segments.Count > 0)
+            .ToList();
+
+        var fileProcessingTasks = nzbFiles
             .DistinctBy(x => x.GetSubjectFileName())
             .Select(GetFileProcessor)
             .Where(x => x is not null)
