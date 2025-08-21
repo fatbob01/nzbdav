@@ -133,4 +133,16 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
     {
         public long TotalSize { get; init; }
     }
+
+    // completed-symlinks
+    public async Task<List<DavItem>> GetCompletedSymlinkCategoryChildren(string category, CancellationToken ct = default)
+    {
+        var query = from historyItem in Ctx.HistoryItems
+            where historyItem.Category == category
+                  && historyItem.DownloadStatus == HistoryItem.DownloadStatusOption.Completed
+            join davItem in Ctx.Items on historyItem.JobName equals davItem.Name
+            where davItem.Type == DavItem.ItemType.Directory
+            select davItem;
+        return await query.Distinct().ToListAsync(ct);
+    }
 }
