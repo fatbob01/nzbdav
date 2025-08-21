@@ -46,8 +46,8 @@ if [ -z "${FRONTEND_BACKEND_API_KEY}" ]; then
     export FRONTEND_BACKEND_API_KEY=$(head -c 32 /dev/urandom | hexdump -ve '1/1 "%.2x"')
 fi
 
-# Change permissions on /config directory to the given PUID and GUID
-chown $PUID:$GUID /config
+# Change permissions on /config directory to the given PUID and PGID
+chown $PUID:$PGID /config
 
 # Run backend as appuser in background
 cd /app/backend
