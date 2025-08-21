@@ -13,7 +13,7 @@ public class RemoveFromHistoryController(
 {
     public async Task<RemoveFromHistoryResponse> RemoveFromHistory(RemoveFromHistoryRequest request)
     {
-        await dbClient.RemoveHistoryItemAsync(request.NzoId);
+        await dbClient.RemoveHistoryItemAsync(request.NzoId, request.DelCompletedFiles);
         return new RemoveFromHistoryResponse() { Status = true };
     }
 

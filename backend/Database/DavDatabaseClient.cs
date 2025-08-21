@@ -115,11 +115,30 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
     }
 
     // history
-    public async Task RemoveHistoryItemAsync(string id)
+    public async Task RemoveHistoryItemAsync(string id, bool delCompletedFiles = false)
     {
         try
         {
-            Ctx.HistoryItems.Remove(new HistoryItem() { Id = Guid.Parse(id) });
+            var guid = Guid.Parse(id);
+
+            if (delCompletedFiles)
+            {
+                var historyItem = await Ctx.HistoryItems.FirstOrDefaultAsync(x => x.Id == guid);
+                if (historyItem is not null)
+                {
+                    var categoryFolder = await Ctx.Items.FirstOrDefaultAsync(x =>
+                        x.ParentId == DavItem.ContentFolder.Id && x.Name == historyItem.Category);
+                    if (categoryFolder is not null)
+                    {
+                        var mountFolder = await Ctx.Items.FirstOrDefaultAsync(x =>
+                            x.ParentId == categoryFolder.Id && x.Name == historyItem.JobName);
+                        if (mountFolder is not null)
+                            Ctx.Items.Remove(mountFolder);
+                    }
+                }
+            }
+
+            Ctx.HistoryItems.Remove(new HistoryItem() { Id = guid });
             await Ctx.SaveChangesAsync();
         }
         catch (DbUpdateConcurrencyException e)

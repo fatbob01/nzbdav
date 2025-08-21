@@ -62,32 +62,29 @@ public class SabApiController(
 
     public BaseController GetController()
     {
-        switch (HttpContext.GetQueryParam("mode"))
+        var mode = HttpContext.GetQueryParam("mode");
+        var name = HttpContext.GetQueryParam("name");
+
+        return mode switch
         {
-            case "version":
-                return new GetVersionController(HttpContext, configManager);
-            case "get_config":
-                return new GetConfigController(HttpContext, configManager);
-            case "fullstatus":
-                return new GetFullStatusController(HttpContext, configManager);
-            case "addfile":
-                return new AddFileController(HttpContext, dbClient, queueManager, configManager);
+            "version" => new GetVersionController(HttpContext, configManager),
+            "get_config" => new GetConfigController(HttpContext, configManager),
+            "fullstatus" => new GetFullStatusController(HttpContext, configManager),
+            "addfile" => new AddFileController(HttpContext, dbClient, queueManager, configManager),
 
-            case "queue" when HttpContext.GetQueryParam("name") == "delete":
-                return new RemoveFromQueueController(HttpContext, dbClient, queueManager, configManager);
-            case "queue" when HttpContext.GetQueryParam("name") == "delete_all":
-                return new ClearQueueController(HttpContext, dbClient, configManager, queueManager);
-            case "queue":
-                return new GetQueueController(HttpContext, dbClient, queueManager, configManager);
+            "queue" when name == "delete" =>
+                new RemoveFromQueueController(HttpContext, dbClient, queueManager, configManager),
+            "queue" when name == "delete_all" =>
+                new ClearQueueController(HttpContext, dbClient, configManager, queueManager),
+            "queue" => new GetQueueController(HttpContext, dbClient, queueManager, configManager),
 
-            case "history" when HttpContext.GetQueryParam("name") == "delete":
-                return new RemoveFromHistoryController(HttpContext, dbClient, configManager);
-            case "history":
-                return new GetHistoryController(HttpContext, dbClient, configManager);
+            // del_completed_files handled within RemoveFromHistoryController
+            "history" when name == "delete" =>
+                new RemoveFromHistoryController(HttpContext, dbClient, configManager),
+            "history" => new GetHistoryController(HttpContext, dbClient, configManager),
 
-            default:
-                throw new BadHttpRequestException("Invalid mode");
-        }
+            _ => throw new BadHttpRequestException("Invalid mode"),
+        };
     }
 
     public abstract class BaseController(HttpContext httpContext, ConfigManager configManager) : ControllerBase
