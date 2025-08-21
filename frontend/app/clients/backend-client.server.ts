@@ -131,6 +131,20 @@ class BackendClient {
         }
     }
 
+    public async removeHistory(nzoId: string): Promise<void> {
+        const url = process.env.BACKEND_URL + `/api?mode=history&name=delete&value=${nzoId}&del_completed_files=0`;
+
+        const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "x-api-key": apiKey }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to remove history item: ${(await response.json()).error}`);
+        }
+    }
+
     public async listWebdavDirectory(directory: string): Promise<DirectoryItem[]> {
         const url = process.env.BACKEND_URL + "/api/list-webdav-directory";
 
