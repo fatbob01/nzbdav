@@ -14,16 +14,23 @@ public class FileProcessor(NzbFile nzbFile, UsenetProviderManager usenet, Cancel
 
     public override async Task<BaseProcessor.Result> ProcessAsync()
     {
-        var firstSegment = nzbFile.Segments[0].MessageId.Value;
-        var header = await usenet.GetSegmentYencHeaderAsync(firstSegment, default);
+        string headerFileName = "";
+        if (nzbFile.Segments.Count > 0)
+        {
+            var firstSegment = nzbFile.Segments[0].MessageId.Value;
+            var header = await usenet.GetSegmentYencHeaderAsync(firstSegment, ct);
+            headerFileName = header.FileName;
+        }
+
         var subjectFilename = nzbFile.GetSubjectFileName();
-        var fileName = GetFileName(subjectFilename, header.FileName);
+        var fileName = GetFileName(subjectFilename, headerFileName);
+        var fileSize = await usenet.GetFileSizeAsync(nzbFile, ct);
 
         return new Result()
         {
             NzbFile = nzbFile,
             FileName = fileName,
-            FileSize = header.FileSize,
+            FileSize = fileSize,
         };
     }
 
@@ -38,7 +45,9 @@ public class FileProcessor(NzbFile nzbFile, UsenetProviderManager usenet, Cancel
             return subjectFilename;
         }
 
-        var value = !string.IsNullOrEmpty(subjectFilename) ? subjectFilename : headerFileName;
+        var value = !string.IsNullOrEmpty(subjectFilename) ? subjectFilename
+            : !string.IsNullOrEmpty(headerFileName) ? headerFileName
+            : "unknown";
         return Path.GetFileName(value);
     }
 
