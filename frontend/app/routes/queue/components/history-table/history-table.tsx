@@ -1,6 +1,7 @@
 import type { HistoryResponse } from "~/clients/backend-client.server"
 import styles from "./history-table.module.css"
-import { Table } from "react-bootstrap"
+import { Table, Button } from "react-bootstrap"
+import { Form } from "react-router"
 import { CategoryBadge, formatFileSize, StatusBadge } from "../queue-table/queue-table"
 
 export type HistoryTableProps = {
@@ -16,7 +17,8 @@ export function HistoryTable({ history }: HistoryTableProps) {
                     <th className={styles["first-table-header"]}>Name</th>
                     <th className={styles["table-header"]}>Category</th>
                     <th className={styles["table-header"]}>Status</th>
-                    <th className={styles["last-table-header"]}>Size</th>
+                    <th className={styles["table-header"]}>Size</th>
+                    <th className={styles["last-table-header"]}>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,6 +37,14 @@ export function HistoryTable({ history }: HistoryTableProps) {
                         </td>
                         <td className={styles["row-column"]}>
                             {formatFileSize(slot.bytes)}
+                        </td>
+                        <td className={styles["row-column"]}>
+                            <Form method="post" className={styles["action-form"]}>
+                                <input type="hidden" name="nzoId" value={slot.nzo_id} />
+                                <Button variant="danger" type="submit" name="intent" value="remove-history">
+                                    Remove
+                                </Button>
+                            </Form>
                         </td>
                     </tr>
                 )}

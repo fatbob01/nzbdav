@@ -131,6 +131,26 @@ export async function action({ request }: Route.ActionArgs) {
         return clearQueueAction({ request, params: {}, context: { VALUE_FROM_EXPRESS: '' } });
     }
 
+    if (intent === "remove-history") {
+        let session = await sessionStorage.getSession(request.headers.get("cookie"));
+        let user = session.get("user");
+        if (!user) return redirect("/login");
+
+        try {
+            const nzoId = formData.get("nzoId");
+            if (typeof nzoId !== "string") {
+                return { error: "Error removing history." };
+            }
+            await backendClient.removeHistory(nzoId);
+            return { success: true };
+        } catch (error) {
+            if (error instanceof Error) {
+                return { error: error.message };
+            }
+            throw error;
+        }
+    }
+
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");

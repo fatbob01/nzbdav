@@ -6,6 +6,7 @@ declare const styles: {
   readonly "table-header": string;
   readonly "table-row": string;
   readonly "truncate": string;
+  readonly "action-form": string;
 };
 export = styles;
 

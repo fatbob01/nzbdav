@@ -52,3 +52,7 @@
 .table-row:hover {
     background-color: hsl(200 20% 8%) !important;
 }
+
+.action-form {
+    display: inline;
+}
