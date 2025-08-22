@@ -43,6 +43,10 @@
     transition: all var(--transition-fast);
 }
 
+.advancedToggle {
+    margin-bottom: var(--spacing-lg);
+}
+
 .button:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px var(--shadow-medium);

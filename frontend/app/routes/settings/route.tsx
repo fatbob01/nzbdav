@@ -3,7 +3,7 @@ import { Layout } from "../_index/components/layout/layout";
 import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
 import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
-import { Tabs, Tab, Button } from "react-bootstrap"
+import { Tabs, Tab, Button, Form } from "react-bootstrap"
 import { backendClient } from "~/clients/backend-client.server";
 import { redirect } from "react-router";
 import { sessionStorage } from "~/auth/authentication.server";
@@ -26,6 +26,8 @@ function isProvidersSettingsUpdated(config: Record<string, string>, newConfig: R
 import React from "react";
 import { isSabnzbdSettingsUpdated, isSabnzbdSettingsValid, SabnzbdSettings } from "./sabnzbd/sabnzbd";
 import { isWebdavSettingsUpdated, isWebdavSettingsValid, WebdavSettings } from "./webdav/webdav";
+import { LibrarySettings } from "./library/library";
+import { MaintenanceSettings } from "./maintenance/maintenance";
 
 const defaultConfig = {
     "api.key": "",
@@ -38,6 +40,7 @@ const defaultConfig = {
     "webdav.user": "",
     "webdav.pass": "",
     "rclone.mount-dir": "",
+    "media.library-dir": "",
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -96,6 +99,7 @@ function Body(props: BodyProps) {
     const [isProvidersReadyToSave, setIsProvidersReadyToSave] = React.useState(false);
     const [isSaving, setIsSaving] = React.useState(false);
     const [isSaved, setIsSaved] = React.useState(false);
+    const [showAdvanced, setShowAdvanced] = React.useState(false);
 
     const isProvidersUpdated = isProvidersSettingsUpdated(config, newConfig);
     const isSabnzbdUpdated = isSabnzbdSettingsUpdated(config, newConfig);
@@ -149,6 +153,14 @@ function Body(props: BodyProps) {
 
     return (
         <div className={styles.container}>
+            <Form.Check
+                type="switch"
+                id="advanced-toggle"
+                className={styles.advancedToggle}
+                label="Show Advanced Settings"
+                checked={showAdvanced}
+                onChange={() => setShowAdvanced(!showAdvanced)}
+            />
             <Tabs
                 defaultActiveKey="providers"
                 className={styles.tabs}
@@ -162,6 +174,12 @@ function Body(props: BodyProps) {
                 <Tab eventKey="webdav" title={webdavTitle}>
                     <WebdavSettings config={newConfig} setNewConfig={setNewConfig} />
                 </Tab>
+                {showAdvanced && <Tab eventKey="library" title="Library">
+                    <LibrarySettings config={newConfig} setNewConfig={setNewConfig} />
+                </Tab>}
+                {showAdvanced && <Tab eventKey="maintenance" title="Maintenance">
+                    <MaintenanceSettings />
+                </Tab>}
             </Tabs>
             <hr />
             {isUpdated && <Button
