@@ -79,10 +79,6 @@ This setup disables Rclone's caching and streams directly, since the  end-client
 --allow-other
 ```
 
-## Windows Requirements
-
-When running on Windows, creating symbolic links requires either elevated privileges or enabling "Developer Mode" in system settings. Ensure one of these options is configured before migrating library symlinks.
-
 * The `--links` setting in RClone is important. It allows *.rclonelink files within the webdav to be translated to symlinks when mounted onto your filesystem.
 
     > NOTE: Be sure to use an updated version of rclone that supports the `--links` argument.

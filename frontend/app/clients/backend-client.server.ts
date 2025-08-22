@@ -212,18 +212,6 @@ class BackendClient {
         return data.status;
     }
 
-    public async migrateLibrarySymlinks(): Promise<void> {
-        const url = process.env.BACKEND_URL + "/api/migrate-library-symlinks";
-        const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "x-api-key": apiKey }
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to migrate library symlinks: ${(await response.json()).error}`);
-        }
-    }
-
     public async testUsenetConnection(request: TestUsenetConnectionRequest): Promise<boolean> {
         const url = process.env.BACKEND_URL + "/api/test-usenet-connection";
 
