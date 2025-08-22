@@ -2,15 +2,15 @@ import { Alert, Button, Form as BootstrapForm } from "react-bootstrap";
 import styles from "./route.module.css"
 import type { Route } from "./+types/route";
 import { useState } from "react";
-import { backendClient } from "~/clients/backend-client.server";
 import { Form, redirect, useNavigation } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
 
 type OnboardingPageData = {
     error: string
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     // if already logged in, redirect to landing page
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
@@ -100,9 +100,11 @@ export async function action({ request }: Route.ActionArgs) {
         const username = formData.get("username")?.toString();
         const password = formData.get("password")?.toString();
         if (!username || !password) throw new Error("username and password required");
-        var isSuccess = await backendClient.createAccount(username, password);
+        const { backendClient } = await import("~/clients/backend-client.server");
+        const { sessionStorage } = await import("~/auth/authentication.server");
+        const isSuccess = await backendClient.createAccount(username, password);
         if (!isSuccess) throw new Error("Unknown error creating account");
-        let session = await sessionStorage.getSession(request.headers.get("cookie"));
+        const session = await sessionStorage.getSession(request.headers.get("cookie"));
         session.set("user", { username: username });
         return redirect("/", { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
     }

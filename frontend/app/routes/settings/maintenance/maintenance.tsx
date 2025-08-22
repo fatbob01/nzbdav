@@ -1,7 +1,6 @@
 import { Button } from "react-bootstrap";
 import styles from "./maintenance.module.css";
 import React from "react";
-import { backendClient } from "~/clients/backend-client.server";
 
 export function MaintenanceSettings() {
     const [messages, setMessages] = React.useState<string[]>([]);
@@ -21,7 +20,7 @@ export function MaintenanceSettings() {
     }, []);
 
     const onMigrate = async () => {
-        await backendClient.migrateLibrarySymlinks();
+        await fetch("/api.backend.migrate-library-symlinks", { method: "POST" });
     };
 
     return (

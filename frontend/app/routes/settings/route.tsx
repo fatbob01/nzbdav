@@ -4,9 +4,7 @@ import { TopNavigation } from "../_index/components/top-navigation/top-navigatio
 import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
 import { Tabs, Tab, Button, Form } from "react-bootstrap"
-import { backendClient } from "~/clients/backend-client.server";
 import { redirect } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
 import { UsenetProviders } from "./usenet-providers/usenet-providers";
 
 // Helper function to check if provider settings have been updated
@@ -44,13 +42,15 @@ const defaultConfig = {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     // ensure user is logged in
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");
 
     // fetch the config items
-    var configItems = await backendClient.getConfig(Object.keys(defaultConfig));
+    const configItems = await backendClient.getConfig(Object.keys(defaultConfig));
 
     // transform to a map
     const config: Record<string, string> = defaultConfig;

@@ -1,15 +1,15 @@
 import { Alert, Button, Form as BootstrapForm } from "react-bootstrap";
 import styles from "./route.module.css"
 import type { Route } from "./+types/route";
-import { authenticate, sessionStorage } from "~/auth/authentication.server";
 import { Form, redirect, useNavigation } from "react-router";
-import { backendClient } from "~/clients/backend-client.server";
 
 type LoginPageData = {
     loginError: string
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     // if already logged in, redirect to landing page
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
@@ -47,8 +47,9 @@ export default function Index({ loaderData, actionData }: Route.ComponentProps) 
 
 export async function action({ request }: Route.ActionArgs) {
     try {
-        let user = await authenticate(request);
-        let session = await sessionStorage.getSession(request.headers.get("cookie"));
+        const { authenticate, sessionStorage } = await import("~/auth/authentication.server");
+        const user = await authenticate(request);
+        const session = await sessionStorage.getSession(request.headers.get("cookie"));
         session.set("user", user);
         return redirect("/", { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
     }

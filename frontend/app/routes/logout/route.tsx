@@ -1,8 +1,8 @@
 import type { Route } from "./+types/route";
-import { sessionStorage } from "~/auth/authentication.server";
 import { redirect } from "react-router";
 
 export async function action({ request }: Route.ActionArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
     // if already logged out, redirect to login page
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");

@@ -1,9 +1,9 @@
 import type { Route } from "./+types/route";
-import { backendClient } from "~/clients/backend-client.server";
 import { redirect } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
 
 export async function action({ request }: Route.ActionArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     // ensure user is logged in
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");

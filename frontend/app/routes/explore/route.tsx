@@ -5,11 +5,9 @@ import { LeftNavigation } from "../_index/components/left-navigation/left-naviga
 import { Breadcrumbs } from "./breadcrumbs/breadcrumbs";
 import styles from "./route.module.css"
 import { Link, redirect, useLocation, useNavigate } from "react-router";
-import { backendClient, type DirectoryItem } from "~/clients/backend-client.server";
-import { sessionStorage } from "~/auth/authentication.server";
+import type { DirectoryItem } from "~/clients/backend-client.server";
 import { useCallback } from "react";
 import { lookup as getMimeType } from 'mime-types';
-import { getDownloadKey } from "~/auth/downloads.server";
 
 export type ExplorePageData = {
     parentDirectories: string[],
@@ -23,6 +21,9 @@ export type ExploreFile = DirectoryItem & {
 
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
+    const { getDownloadKey } = await import("~/auth/downloads.server");
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");

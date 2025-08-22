@@ -1,13 +1,11 @@
 import { redirect } from "react-router";
-import { clearQueueAction } from "./actions.server";
 import type { Route } from "./+types/route";
-import { sessionStorage } from "~/auth/authentication.server";
 import { Layout } from "../_index/components/layout/layout";
 import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
 import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
 import { Alert } from 'react-bootstrap';
-import { backendClient, type HistoryResponse, type QueueResponse } from "~/clients/backend-client.server";
+import type { HistoryResponse, QueueResponse } from "~/clients/backend-client.server";
 import { EmptyQueue } from "./components/empty-queue/empty-queue";
 import { EmptyHistory } from "./components/empty-history/empty-history";
 import { HistoryTable } from "./components/history-table/history-table";
@@ -22,14 +20,16 @@ type BodyProps = {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");
 
-    var queuePromise = backendClient.getQueue();
-    var historyPromise = backendClient.getHistory();
-    var queue = await queuePromise;
-    var history = await historyPromise;
+    const queuePromise = backendClient.getQueue();
+    const historyPromise = backendClient.getHistory();
+    const queue = await queuePromise;
+    const history = await historyPromise;
     return {
         queue: queue,
         history: history,
@@ -128,10 +128,13 @@ export async function action({ request }: Route.ActionArgs) {
     const intent = formData.get("intent");
 
     if (intent === "clear-queue") {
+        const { clearQueueAction } = await import("./actions.server");
         return clearQueueAction({ request, params: {}, context: { VALUE_FROM_EXPRESS: '' } });
     }
 
     if (intent === "remove-history") {
+        const { sessionStorage } = await import("~/auth/authentication.server");
+        const { backendClient } = await import("~/clients/backend-client.server");
         let session = await sessionStorage.getSession(request.headers.get("cookie"));
         let user = session.get("user");
         if (!user) return redirect("/login");
@@ -151,6 +154,8 @@ export async function action({ request }: Route.ActionArgs) {
         }
     }
 
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");

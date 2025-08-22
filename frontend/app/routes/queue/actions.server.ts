@@ -1,9 +1,9 @@
 import { redirect } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
-import { backendClient } from "~/clients/backend-client.server";
 import type { Route } from "./+types/route";
 
 export async function clearQueueAction({ request }: Route.ActionArgs) {
+    const { sessionStorage } = await import("~/auth/authentication.server");
+    const { backendClient } = await import("~/clients/backend-client.server");
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");

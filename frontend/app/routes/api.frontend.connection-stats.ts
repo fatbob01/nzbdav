@@ -1,7 +1,7 @@
 import type { Route } from "./+types/api.frontend.connection-stats";
-import { backendClient } from "~/clients/backend-client.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+    const { backendClient } = await import("~/clients/backend-client.server");
     try {
         const connectionStats = await backendClient.getConnectionStats();
         return Response.json(connectionStats);
