@@ -17,8 +17,6 @@ using Microsoft.Extensions.Logging;
 using NzbWebDAV.Utils;
 using NzbWebDAV.WebDav;
 using NzbWebDAV.WebDav.Base;
-using NzbWebDAV.Websocket;
-using NzbWebDAV.Tasks;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -59,14 +57,12 @@ class Program
             .AddSingleton(configManager)
             .AddSingleton<UsenetProviderManager>()
             .AddSingleton<QueueManager>()
-            .AddSingleton<Websocket.WebsocketManager>()
             .AddScoped<DavDatabaseContext>()
             .AddScoped<DavDatabaseClient>()
             .AddScoped<DatabaseStore>()
             .AddScoped<IStore, DatabaseStore>()
             .AddScoped<GetAndHeadHandlerPatch>()
             .AddScoped<SabApiController>()
-            .AddScoped<Tasks.MigrateLibrarySymlinksTask>()
             .AddNWebDav(opts =>
             {
                 opts.Handlers["GET"] = typeof(GetAndHeadHandlerPatch);
@@ -115,12 +111,6 @@ class Program
         });
         app.UseMiddleware<RequestCancelledMiddleware>();
         app.UseAuthentication();
-        app.UseWebSockets();
-        app.Map("/ws", async context =>
-        {
-            var wsManager = context.RequestServices.GetRequiredService<Websocket.WebsocketManager>();
-            await wsManager.AcceptWebSocketAsync(context);
-        });
         app.MapControllers();
         app.UseNWebDav();
         await app.RunAsync();
