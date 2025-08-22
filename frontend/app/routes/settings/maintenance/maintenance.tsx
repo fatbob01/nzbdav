@@ -1,10 +1,11 @@
 import { Button } from "react-bootstrap";
 import styles from "./maintenance.module.css";
 import React from "react";
-import { backendClient } from "~/clients/backend-client.server";
+import { useFetcher } from "react-router";
 
 export function MaintenanceSettings() {
     const [messages, setMessages] = React.useState<string[]>([]);
+    const fetcher = useFetcher();
 
     React.useEffect(() => {
         const url = (process.env.BACKEND_URL || "").replace(/^http/, "ws") + "/ws";
@@ -20,8 +21,18 @@ export function MaintenanceSettings() {
         return () => ws.close();
     }, []);
 
-    const onMigrate = async () => {
-        await backendClient.migrateLibrarySymlinks();
+    React.useEffect(() => {
+        if (fetcher.state === "idle" && fetcher.data) {
+            if (fetcher.data.error) {
+                setMessages(prev => [...prev, `Error: ${fetcher.data.error}`]);
+            } else {
+                setMessages(prev => [...prev, "Migration started"]);
+            }
+        }
+    }, [fetcher.state, fetcher.data]);
+
+    const onMigrate = () => {
+        fetcher.submit(null, { method: "post", action: "/api/migrate-library-symlinks" });
     };
 
     return (
