@@ -7,6 +7,7 @@ public class ConfigItem
     public static readonly ImmutableHashSet<string> Keys = ImmutableHashSet.Create([
         "api.key",
         "api.categories",
+        "api.max-queue-connections",
         // Legacy single provider keys (maintained for backward compatibility)
         "usenet.host",
         "usenet.port",

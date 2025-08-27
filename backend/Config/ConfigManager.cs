@@ -2,6 +2,7 @@
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Utils;
+using System.Globalization;
 
 namespace NzbWebDAV.Config;
 
@@ -75,6 +76,34 @@ public class ConfigManager
             StringUtil.EmptyToNull(GetConfigValue("usenet.connections-per-stream"))
             ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("CONNECTIONS_PER_STREAM"))
             ?? "1"
+        );
+    }
+
+    /// <summary>
+    /// Gets the maximum number of Usenet connections allowed. Defaults to 10.
+    /// </summary>
+    public int GetMaxConnections()
+    {
+        var providerIndex = GetPrimaryProviderIndex();
+        return int.Parse(
+            StringUtil.EmptyToNull(GetProviderConfigValue(providerIndex, "connections"))
+            ?? StringUtil.EmptyToNull(GetConfigValue("usenet.connections"))
+            ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("MAX_CONNECTIONS"))
+            ?? "10",
+            CultureInfo.InvariantCulture
+        );
+    }
+
+    /// <summary>
+    /// Gets the maximum number of queue connections allowed for API operations. Defaults to 4.
+    /// </summary>
+    public int GetMaxQueueConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("api.max-queue-connections"))
+            ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("MAX_QUEUE_CONNECTIONS"))
+            ?? "4",
+            CultureInfo.InvariantCulture
         );
     }
 
