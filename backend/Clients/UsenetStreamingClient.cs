@@ -23,7 +23,7 @@ public class UsenetStreamingClient
         var useSsl = bool.Parse(configManager.GetProviderConfigValue(providerIndex, "use-ssl") ?? "false");
         var user = configManager.GetProviderConfigValue(providerIndex, "user") ?? string.Empty;
         var pass = configManager.GetProviderConfigValue(providerIndex, "pass") ?? string.Empty;
-        var connections = int.Parse(configManager.GetProviderConfigValue(providerIndex, "connections") ?? "10");
+        var connections = configManager.GetMaxConnections();
 
         // initialize the nntp-client
         var createNewConnection = (CancellationToken ct) => CreateNewConnection(host, port, useSsl, user, pass, ct);
@@ -40,11 +40,11 @@ public class UsenetStreamingClient
 
             // if unrelated config changed, do nothing
             var relevantChange = configEventArgs.ChangedConfig.Keys.Any(key =>
-                key == "usenet.providers.primary" || key.StartsWith(prefix));
+                key == "usenet.providers.primary" || key.StartsWith(prefix) || key == "usenet.connections");
             if (!relevantChange) return;
 
             // update the connection-pool according to the new config
-            var connectionCount = int.Parse(configManager.GetProviderConfigValue(providerIndex, "connections") ?? "10");
+            var connectionCount = configManager.GetMaxConnections();
             var newHost = configManager.GetProviderConfigValue(providerIndex, "host") ?? string.Empty;
             var newPort = int.Parse(configManager.GetProviderConfigValue(providerIndex, "port") ?? "119");
             var newUseSsl = bool.Parse(configManager.GetProviderConfigValue(providerIndex, "use-ssl") ?? "false");
