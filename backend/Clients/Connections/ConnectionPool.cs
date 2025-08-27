@@ -27,7 +27,7 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
     /* --------------------------------- state --------------------------------------- */
 
     private readonly ConcurrentStack<Pooled> _available = new();
-    private readonly SemaphoreSlim _gate;
+    private readonly ExtendedSemaphoreSlim _gate;
     private readonly CancellationTokenSource _sweepCts = new();
     private readonly Task _sweeperTask; // keeps timer alive
 
@@ -48,7 +48,7 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
                    ?? throw new ArgumentNullException(nameof(connectionFactory));
         IdleTimeout = idleTimeout ?? TimeSpan.FromMinutes(1);
 
-        _gate = new SemaphoreSlim(maxConnections, maxConnections);
+        _gate = new ExtendedSemaphoreSlim(maxConnections, maxConnections);
         _sweeperTask = Task.Run(SweepLoop); // background idle-reaper
     }
 
@@ -62,13 +62,14 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
 
     /// <summary>Borrow a connection; releases automatically with the lock.</summary>
     public async Task<ConnectionLock<T>> GetConnectionLockAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int reserved = 0)
     {
         // Make caller cancellation also cancel the wait on the gate.
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _sweepCts.Token);
 
-        await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        await _gate.WaitAsync(reserved, linked.Token).ConfigureAwait(false);
 
         // Pool might have been disposed after wait returned:
         if (Volatile.Read(ref _disposed) == 1)
@@ -218,7 +219,7 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
 
         _sweepCts.Dispose();
         // Intentionally NOT disposing _gate: outstanding handles may still try
-        // to Release().  A SemaphoreSlim with no waiters is effectively inert.
+        // to Release().  The custom semaphore with no waiters is effectively inert.
         GC.SuppressFinalize(this);
     }
 
