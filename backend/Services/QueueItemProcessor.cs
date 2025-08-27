@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Clients;
+using NzbWebDAV.Clients.Connections;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
@@ -27,11 +28,15 @@ public class QueueItemProcessor(
     {
         // initialize
         var startTime = DateTime.Now;
+        var reservedConnections = configManager.GetMaxConnections() - configManager.GetMaxQueueConnections();
 
         // process the job
         try
         {
-            await ProcessQueueItemAsync(startTime);
+            using (ct.SetScopedContext(new ReservedConnectionsContext(reservedConnections)))
+            {
+                await ProcessQueueItemAsync(startTime);
+            }
         }
 
         // when non-retryable errors are encountered

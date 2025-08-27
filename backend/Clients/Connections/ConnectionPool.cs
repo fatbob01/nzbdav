@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using NzbWebDAV.Extensions;
 
 namespace NzbWebDAV.Clients.Connections;
 
@@ -69,7 +70,10 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _sweepCts.Token);
 
-        await _gate.WaitAsync(reserved, linked.Token).ConfigureAwait(false);
+        var reservedFromContext = cancellationToken.GetContext<ReservedConnectionsContext>()?.ReservedConnections;
+        var effectiveReserved = reservedFromContext ?? reserved;
+
+        await _gate.WaitAsync(effectiveReserved, linked.Token).ConfigureAwait(false);
 
         // Pool might have been disposed after wait returned:
         if (Volatile.Read(ref _disposed) == 1)
