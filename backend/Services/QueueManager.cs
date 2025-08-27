@@ -51,7 +51,7 @@ public class QueueManager : IDisposable
                 // get the next queue-item from the database
                 await using var dbContext = new DavDatabaseContext();
                 var dbClient = new DavDatabaseClient(dbContext);
-                var queueItem = await dbClient.GetTopQueueItem(ct);
+                var queueItem = await dbClient.GetTopQueueItem(DateTime.Now, ct);
                 if (queueItem is null)
                 {
                     // if we're done with the queue, wait
