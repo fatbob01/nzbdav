@@ -37,6 +37,7 @@ const defaultConfig = {
     "usenet.connections-per-stream": "",
     "webdav.user": "",
     "webdav.pass": "",
+    "webdav.enforce-readonly": "true",
     "rclone.mount-dir": "",
 }
 
