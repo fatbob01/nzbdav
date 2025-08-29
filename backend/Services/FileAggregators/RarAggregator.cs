@@ -1,6 +1,7 @@
 ﻿using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Services.FileProcessors;
+using NzbWebDAV.Utils;
 
 namespace NzbWebDAV.Services.FileAggregators;
 
@@ -42,6 +43,13 @@ public class RarAggregator(DavDatabaseClient dbClient, DavItem mountDirectory) :
             var rarParts = archiveFile.Value.ToArray();
             var parentDirectory = EnsurePath(pathWithinArchive);
             var fileName = Path.GetFileName(pathWithinArchive);
+
+            if (archiveFiles.Count == 1 && ObfuscationUtil.IsProbablyObfuscated(fileName))
+            {
+                var extension = Path.GetExtension(fileName);
+                var mountDirName = Path.GetFileNameWithoutExtension(mountDirectory.Name);
+                fileName = mountDirName + extension;
+            }
 
             // Check if file already exists
             var existingItem = dbClient.Ctx.Items
