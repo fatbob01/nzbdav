@@ -63,6 +63,9 @@ public class DatabaseStoreCollection(
 
     protected override async Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
     {
+        if (configManager.IsEnforceReadonlyWebdavEnabled())
+            return DavStatusCode.Forbidden;
+
         // Cannot delete items from dav root.
         if (davDirectory.Id == DavItem.Root.Id)
             return DavStatusCode.Forbidden;
@@ -100,7 +103,7 @@ public class DatabaseStoreCollection(
             DavItem.ItemType.Directory =>
                 new DatabaseStoreCollection(davItem, dbClient, configManager, usenetClient, queueManager),
             DavItem.ItemType.SymlinkRoot =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreNzbFile(davItem, dbClient, usenetClient, configManager),
             DavItem.ItemType.RarFile =>

@@ -63,6 +63,9 @@ public class DatabaseStoreWatchFolder(
 
     protected override async Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
     {
+        if (configManager.IsEnforceReadonlyWebdavEnabled())
+            return DavStatusCode.Forbidden;
+
         var controller = new RemoveFromQueueController(null!, dbClient, queueManager, configManager);
 
         // get the item to delete

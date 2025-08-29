@@ -4,6 +4,7 @@ using NWebDav.Server;
 using NWebDav.Server.Stores;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Config;
 using NzbWebDAV.WebDav.Base;
 using NzbWebDAV.WebDav.Requests;
 
@@ -12,6 +13,7 @@ namespace NzbWebDAV.WebDav;
 public class DatabaseStoreSymlinkCollection(
     DavItem davDirectory,
     DavDatabaseClient dbClient,
+    ConfigManager configManager,
     string parentPath = ""
 ) : BaseStoreCollection
 {
@@ -73,6 +75,9 @@ public class DatabaseStoreSymlinkCollection(
 
     protected override Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
     {
+        if (configManager.IsEnforceReadonlyWebdavEnabled())
+            return Task.FromResult(DavStatusCode.Forbidden);
+
         // Items cannot be deleted from the '/completed-symlinks' folder.
         // This path simply mirrors the '/content' folder, except with symlinks.
         // This allows radarr/sonarr to import the lightweight symlink, instead
@@ -111,7 +116,7 @@ public class DatabaseStoreSymlinkCollection(
         return davItem.Type switch
         {
             DavItem.ItemType.Directory =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient, RelativePath),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager, RelativePath),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreSymlinkFile(davItem, RelativePath),
             DavItem.ItemType.RarFile =>

@@ -40,6 +40,16 @@ export function WebdavSettings({ config, setNewConfig }: SabnzbdSettingsProps) {
                     Use this password to connect to the webdav
                 </Form.Text>
             </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Check
+                    type="checkbox"
+                    id="webdav-enforce-readonly-input"
+                    label="Enforce Read-Only"
+                    checked={config["webdav.enforce-readonly"] === "true"}
+                    onChange={e => setNewConfig({ ...config, "webdav.enforce-readonly": e.target.checked.toString() })}
+                />
+            </Form.Group>
         </div>
     );
 }
@@ -47,6 +57,7 @@ export function WebdavSettings({ config, setNewConfig }: SabnzbdSettingsProps) {
 export function isWebdavSettingsUpdated(config: Record<string, string>, newConfig: Record<string, string>) {
     return config["webdav.user"] !== newConfig["webdav.user"]
         || config["webdav.pass"] !== newConfig["webdav.pass"]
+        || config["webdav.enforce-readonly"] !== newConfig["webdav.enforce-readonly"]
 }
 
 export function isWebdavSettingsValid(newConfig: Record<string, string>) {
