@@ -86,6 +86,7 @@
     height: 8px !important;
     border-radius: var(--radius-sm) !important;
     background-color: hsl(200 20% 15%) !important;
+    transition: width 500ms ease-in-out;
 }
 
 .progress-text {
