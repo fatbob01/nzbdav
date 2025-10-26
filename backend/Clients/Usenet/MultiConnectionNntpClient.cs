@@ -1,4 +1,5 @@
-﻿using NzbWebDAV.Clients.Usenet.Connections;
+using System.Threading;
+using NzbWebDAV.Clients.Usenet.Connections;
 using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Streams;
 using NzbWebDAV.Utils;
@@ -9,9 +10,18 @@ using Usenet.Yenc;
 
 namespace NzbWebDAV.Clients.Usenet;
 
-public class MultiConnectionNntpClient(ConnectionPool<INntpClient> connectionPool) : INntpClient
+public class MultiConnectionNntpClient : INntpClient
 {
-    private ConnectionPool<INntpClient> _connectionPool = connectionPool;
+    private ConnectionPool<INntpClient> _connectionPool;
+    private int _liveConnections;
+    private int _idleConnections;
+
+    public MultiConnectionNntpClient(ConnectionPool<INntpClient> connectionPool)
+    {
+        _connectionPool = connectionPool ?? throw new ArgumentNullException(nameof(connectionPool));
+        _connectionPool.OnConnectionPoolChanged += HandleConnectionPoolChanged;
+        ResetConnectionCounts();
+    }
 
     public Task<bool> ConnectAsync(string host, int port, bool useSsl, CancellationToken cancellationToken)
     {
@@ -78,7 +88,7 @@ public class MultiConnectionNntpClient(ConnectionPool<INntpClient> connectionPoo
                 .ContinueWith(_ => connectionLock.Dispose());
             return result;
         }
-        catch (NntpException e)
+        catch (NntpException)
         {
             // we want to replace the underlying connection in cases of NntpExceptions.
             connectionLock.Replace();
@@ -90,7 +100,7 @@ public class MultiConnectionNntpClient(ConnectionPool<INntpClient> connectionPoo
 
             throw;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             // we also want to release the connection-lock if there was any error getting the result.
             connectionLock.Dispose();
@@ -100,18 +110,54 @@ public class MultiConnectionNntpClient(ConnectionPool<INntpClient> connectionPoo
 
     public void UpdateConnectionPool(ConnectionPool<INntpClient> connectionPool)
     {
+        if (connectionPool is null)
+            throw new ArgumentNullException(nameof(connectionPool));
+
         var oldConnectionPool = _connectionPool;
+        if (ReferenceEquals(oldConnectionPool, connectionPool))
+            return;
+
+        oldConnectionPool.OnConnectionPoolChanged -= HandleConnectionPoolChanged;
+
         _connectionPool = connectionPool;
+        _connectionPool.OnConnectionPoolChanged += HandleConnectionPoolChanged;
+        ResetConnectionCounts();
+
         oldConnectionPool.Dispose();
     }
 
-    public int GetActiveConnectionCount() => _connectionPool.ActiveConnectionCount;
-    
-    public int GetAvailableConnectionCount() => _connectionPool.AvailableConnectionCount;
+    public int GetActiveConnectionCount()
+    {
+        var live = Volatile.Read(ref _liveConnections);
+        var idle = Volatile.Read(ref _idleConnections);
+        var active = live - idle;
+        return active < 0 ? 0 : active;
+    }
+
+    public int GetAvailableConnectionCount()
+    {
+        var available = Volatile.Read(ref _idleConnections);
+        return available < 0 ? 0 : available;
+    }
 
     public void Dispose()
     {
+        _connectionPool.OnConnectionPoolChanged -= HandleConnectionPoolChanged;
         _connectionPool.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    private void HandleConnectionPoolChanged(
+        object? sender,
+        ConnectionPool<INntpClient>.ConnectionPoolChangedEventArgs e)
+    {
+        Volatile.Write(ref _liveConnections, e.Live);
+        Volatile.Write(ref _idleConnections, e.Idle);
+    }
+
+    private void ResetConnectionCounts()
+    {
+        Volatile.Write(ref _liveConnections, 0);
+        Volatile.Write(ref _idleConnections, 0);
     }
 }
