@@ -1,25 +1,31 @@
-﻿using NWebDav.Server.Stores;
-using NzbWebDAV.Clients;
+﻿using Microsoft.AspNetCore.Http;
+using NWebDav.Server.Stores;
+using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
-using NzbWebDAV.Services;
+using NzbWebDAV.Queue;
+using NzbWebDAV.Websocket;
 
 namespace NzbWebDAV.WebDav;
 
 public class DatabaseStore(
+    IHttpContextAccessor httpContextAccessor,
     DavDatabaseClient dbClient,
     ConfigManager configManager,
-    UsenetProviderManager usenetClient,
-    QueueManager queueManager
+    UsenetStreamingClient usenetClient,
+    QueueManager queueManager,
+    WebsocketManager websocketManager
 ) : IStore
 {
     private readonly DatabaseStoreCollection _root = new(
         DavItem.Root,
+        httpContextAccessor.HttpContext!,
         dbClient,
         configManager,
         usenetClient,
-        queueManager
+        queueManager,
+        websocketManager
     );
 
     public async Task<IStoreItem?> GetItemAsync(string path, CancellationToken cancellationToken)

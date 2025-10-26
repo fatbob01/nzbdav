@@ -5,6 +5,7 @@ WORKDIR /frontend
 COPY ./frontend ./
 RUN npm install
 RUN npm run build
+RUN npm run build:server
 RUN npm prune --omit=dev
 # -------- Stage 2: Build backend --------
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS backend-build
@@ -20,14 +21,23 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
 WORKDIR /app
 # Prepare environment
 RUN mkdir /config \
-    && apk add --no-cache nodejs npm libc6-compat shadow su-exec bash
+    && apk add --no-cache nodejs npm libc6-compat shadow su-exec bash curl
+
 # Copy frontend
 COPY --from=frontend-build /frontend/node_modules ./frontend/node_modules
 COPY --from=frontend-build /frontend/package.json ./frontend/package.json
-COPY --from=frontend-build /frontend/server.js ./frontend/server.js
+COPY --from=frontend-build /frontend/dist-node/server.js ./frontend/dist-node/server.js
 COPY --from=frontend-build /frontend/build ./frontend/build
 # Copy backend
 COPY --from=backend-build /backend/publish ./backend
 # Entry and runtime setup
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+EXPOSE 3000
+ARG NZBDAV_VERSION
+ENV NZBDAV_VERSION=${NZBDAV_VERSION}
+ENV NODE_ENV=production
+ENV LOG_LEVEL=warning
+
+CMD ["/entrypoint.sh"]

@@ -8,7 +8,9 @@ declare const styles: {
   readonly "explore-icon": string;
   readonly "footer": string;
   readonly "footer-item": string;
+  readonly "github-link": string;
   readonly "github-icon": string;
+  readonly "health-icon": string;
   readonly "item": string;
   readonly "logout-icon": string;
   readonly "providerDetails": string;
@@ -17,6 +19,7 @@ declare const styles: {
   readonly "stream-icon": string;
   readonly "title": string;
   readonly "unstyled": string;
+  readonly "selected": string;
 };
 export = styles;
 

@@ -34,13 +34,9 @@
 }
 
 .logo {
-    height: 28px;
-    width: 28px;
-    transition: transform var(--transition-fast);
-}
-
-.title-container:hover .logo {
-    transform: scale(1.05);
+    width: 26.23px;
+    height: 30px;
+    margin: auto;
 }
 
 /* mobile */

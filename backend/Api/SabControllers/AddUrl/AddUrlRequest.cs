@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using NzbWebDAV.Api.SabControllers.AddFile;
 using NzbWebDAV.Extensions;
 

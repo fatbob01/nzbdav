@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Utils;
@@ -31,6 +32,12 @@ public class ConfigManager
         {
             return _config.TryGetValue(configName, out string? value) ? value : null;
         }
+    }
+
+    public T? GetConfigValue<T>(string configName)
+    {
+        var rawValue = StringUtil.EmptyToNull(GetConfigValue(configName));
+        return rawValue == null ? default : JsonSerializer.Deserialize<T>(rawValue);
     }
 
     public void UpdateValues(List<ConfigItem> configItems)
@@ -68,6 +75,14 @@ public class ConfigManager
         return StringUtil.EmptyToNull(GetConfigValue("api.categories"))
                ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("CATEGORIES"))
                ?? "audio,software,tv,movies";
+    }
+
+    public int GetMaxConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("usenet.connections"))
+            ?? "10"
+        );
     }
 
     public int GetConnectionsPerStream()
@@ -187,11 +202,77 @@ public class ConfigManager
         return (configValue != null ? bool.Parse(configValue) : defaultValue);
     }
 
+    public bool ShowHiddenWebdavFiles()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.show-hidden-files"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public string? GetLibraryDir()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("media.library-dir"));
+    }
+
+    public int GetMaxQueueConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("api.max-queue-connections"))
+            ?? GetMaxConnections().ToString()
+        );
+    }
+
     public bool IsEnforceReadonlyWebdavEnabled()
     {
         var defaultValue = true;
         var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.enforce-readonly"));
-        return configValue != null ? bool.Parse(configValue) : defaultValue;
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsEnsureArticleExistenceEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.ensure-article-existence"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsPreviewPar2FilesEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.preview-par2-files"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsIgnoreSabHistoryLimitEnabled()
+    {
+        var defaultValue = true;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.ignore-history-limit"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public int GetMaxRepairConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("repair.connections"))
+            ?? "0"
+        );
+    }
+
+    public bool IsRepairJobEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("repair.enable"));
+        var isRepairJobEnabled = (configValue != null ? bool.Parse(configValue) : defaultValue);
+        return isRepairJobEnabled
+               && GetMaxConnections() > 0
+               && GetLibraryDir() != null
+               && GetArrConfig().GetInstanceCount() > 0;
+    }
+
+    public ArrConfig GetArrConfig()
+    {
+        var defaultValue = new ArrConfig();
+        return GetConfigValue<ArrConfig>("arr.instances") ?? defaultValue;
     }
 
     public class ConfigEventArgs : EventArgs

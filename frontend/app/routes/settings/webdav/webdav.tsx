@@ -37,7 +37,49 @@ export function WebdavSettings({ config, setNewConfig }: SabnzbdSettingsProps) {
                     value={config["webdav.pass"]}
                     onChange={e => setNewConfig({ ...config, "webdav.pass": e.target.value })} />
                 <Form.Text id="webdav-pass-help" muted>
-                    Use this password to connect to the webdav
+                    Use this password to connect to the webdav.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Check
+                    className={styles.input}
+                    type="checkbox"
+                    id="readonly-checkbox"
+                    aria-describedby="readonly-help"
+                    label={`Enforce Read-Only`}
+                    checked={config["webdav.enforce-readonly"] === "true"}
+                    onChange={e => setNewConfig({ ...config, "webdav.enforce-readonly": "" + e.target.checked })} />
+                <Form.Text id="readonly-help" muted>
+                    The WebDAV `/content` folder will be readonly when checked. WebDAV clients will not be able to delete files within this directory.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Check
+                    className={styles.input}
+                    type="checkbox"
+                    id="show-hidden-files-checkbox"
+                    aria-describedby="show-hidden-files-help"
+                    label={`Show hidden files on Dav Explorer`}
+                    checked={config["webdav.show-hidden-files"] === "true"}
+                    onChange={e => setNewConfig({ ...config, "webdav.show-hidden-files": "" + e.target.checked })} />
+                <Form.Text id="show-hidden-files-help" muted>
+                    Hidden files or directories are those whose names are prefixed by a period.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Check
+                    className={styles.input}
+                    type="checkbox"
+                    id="preview-par2-files-checkbox"
+                    aria-describedby="preview-par2-files-help"
+                    label={`Preview par2 files on Dav Explorer`}
+                    checked={config["webdav.preview-par2-files"] === "true"}
+                    onChange={e => setNewConfig({ ...config, "webdav.preview-par2-files": "" + e.target.checked })} />
+                <Form.Text id="preview-par2-files-help" muted>
+                    When enabled, par2 files will be rendered as text files on the Dav Explorer page, displaying all File-Descriptor entries.
                 </Form.Text>
             </Form.Group>
             <hr />
@@ -57,7 +99,9 @@ export function WebdavSettings({ config, setNewConfig }: SabnzbdSettingsProps) {
 export function isWebdavSettingsUpdated(config: Record<string, string>, newConfig: Record<string, string>) {
     return config["webdav.user"] !== newConfig["webdav.user"]
         || config["webdav.pass"] !== newConfig["webdav.pass"]
+        || config["webdav.show-hidden-files"] !== newConfig["webdav.show-hidden-files"]
         || config["webdav.enforce-readonly"] !== newConfig["webdav.enforce-readonly"]
+        || config["webdav.preview-par2-files"] !== newConfig["webdav.preview-par2-files"]
 }
 
 export function isWebdavSettingsValid(newConfig: Record<string, string>) {
