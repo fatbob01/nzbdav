@@ -1,3 +1,4 @@
+
 <p align="center">
   <img width="1101" height="238" alt="image" src="https://github.com/user-attachments/assets/b14165f4-24ff-4abe-8af6-3ca852e781d4" />
 </p>
@@ -8,9 +9,7 @@ NzbDav is a WebDAV server that allows you to mount and browse NZB documents as a
 
 Check the video below for a demo:
 
-https://github.com/user-attachments/assets/be3e59bc-99df-440d-8144-43b030a4eaa4
-
-> **Attribution**: The video above contains clips of [Sintel (2010)](https://studio.blender.org/projects/sintel/), by Blender Studios, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+https://github.com/user-attachments/assets/d9f8caea-bb65-422e-831d-61d626d5b453
 
 
 # Key Features
@@ -18,11 +17,8 @@ https://github.com/user-attachments/assets/be3e59bc-99df-440d-8144-43b030a4eaa4
 * 📁 **WebDAV Server** - *Host your virtual file system over HTTP(S)*
 * ☁️ **Mount NZB Documents** - *Mount and browse NZB documents without downloading.*
 * 📽️ **Full Streaming and Seeking Abilities** - *Jump ahead to any point in your video streams.*
-* 🗃️ **Stream archived contents** - *View, stream, and seek content within RAR and 7z archives.*
-* 🔓 **Stream password-protected content** - *View, stream, and seek within password-protected archives.*
-* 💙 **Healthchecks & Repairs** - *Automatically replace content that has been removed from your usenet provider*
-* 🧩 **SABnzbd-Compatible API** - *Use NzbDav as a drop-in replacement for sabnzbd.*
-* 🙌 **Sonarr/Radarr Integration** - *Configure it once, and leave it unattended.*
+* 🗃️ **Automatic Unrar** - *View, stream, and seek content within RAR archives*
+* 🧩 **SABnzbd-Compatible API** - *Integrate with Sonarr/Radarr and other tools using a compatible API.*
 
 
 # Getting Started
@@ -32,7 +28,7 @@ The easiest way to get started is by using the official Docker image.
 To try it out, run the following command to pull and run the image with port `3000` exposed:
 
 ```bash
-docker run --rm -it -p 3000:3000 nzbdav/nzbdav:alpha
+docker run --rm -it -p 3000:3000 ghcr.io/nzbdav-dev/nzbdav:pre-alpha
 ```
 
 And if you would like to persist saved settings, attach a volume at `/config`
@@ -44,7 +40,7 @@ docker run --rm -it \
   -e PUID=1000 \
   -e PGID=1000 \
   -p 3000:3000 \
-  nzbdav/nzbdav:alpha
+  ghcr.io/nzbdav-dev/nzbdav:pre-alpha
 ```
 After starting the container, be sure to navigate to the Settings page on the UI to finish setting up your usenet connection settings.
 
@@ -73,17 +69,14 @@ pass = // your rclone-obscured password https://rclone.org/commands/rclone_obscu
 
 
 Below are the RClone settings I use.  
+This setup disables Rclone's caching and streams directly, since the  end-client (Plex/VLC/Chrome/etc) will already buffer-ahead anyway
 ```
---vfs-cache-mode=full
+--vfs-cache-mode=off
 --buffer-size=1024
 --dir-cache-time=1s
---vfs-cache-max-size=5G
---vfs-cache-max-age=180m
 --links
 --use-cookies
 --allow-other
---uid=1000
---gid=1000
 ```
 
 * The `--links` setting in RClone is important. It allows *.rclonelink files within the webdav to be translated to symlinks when mounted onto your filesystem.
@@ -95,9 +88,6 @@ Below are the RClone settings I use.
 * The `--use-cookies` setting in RClone is also important. Without it, RClone is forced to re-authenticate on every single webdav request, slowing it down considerably.
 * The `--allow-other` setting is not required, but it should help if you find that your containers are not able to see the mount contents due to permission issues.
 
-**Optional**
-* The `--vfs-cache-max-size=5G` Can be added to set the max total size of objects in the cache (default off), thus possibly consuming all free space.
-* The `--vfs-cache-max-age=180m` Can be added to set the max time since last access of objects in the cache (default 1h0m0s). 
 
 
 # Radarr / Sonarr
@@ -114,122 +104,8 @@ Once you have the webdav mounted onto your filesystem (e.g. accessible at `/mnt/
 * RClone will make the nzb contents available to your filesystem by streaming, without using any storage space on your server.
 * NZB-Dav will tell Radarr that the "download" has completed within the `/mnt/nzbdav/completed-symlinks` folder.
 * Radarr will grab the symlinks from `/mnt/nzbdav/completed-symlinks` and will move them to wherever you have your media library.
-* The symlinks always point to the `/mnt/nzbdav/content` folder which contain the streamable content.
+* The symlinks always point to the `/mnt/nzbdav/completed` folder which contain the streamable content.
 * Plex accesses one of the symlinks from your media library, it will automatically fetch and stream it from the mounted webdav.
-
-
-# Example Docker Compose Setup
-Fully containerized setup for docker compose. 
-
-See rclone [docs](https://rclone.org/docker/) for more info.
-
-Verify FUSER driver is installed:
-```
-$ fusermount3 --version
-```
-
-Install FUSER driver if needed:
-- `sudo pacman -S fuse3` OR
-- `sudo dnf install fuse3` OR
-- `sudo apt install fuse3` OR
-- `sudo apk add fuse3`
-- etc...
-
-
-Install the rclone volume plugin:
-```
-$ sudo mkdir -p /var/lib/docker-plugins/rclone/config
-$ sudo mkdir -p /var/lib/docker-plugins/rclone/cache
-$ docker plugin install rclone/docker-volume-rclone:amd64 args="-v --links --buffer-size=1024" --alias rclone --grant-all-permissions
-```
-You can set any options here in the `args="..."` section. The command above sets bare minimum, and must be accompanied with more options in the example compose file.
-
-Move or create `rclone.conf` in `/var/lib/docker-plugins/rclone/config/`. Contents should follow the [example](https://github.com/nzbdav-dev/nzbdav?tab=readme-ov-file#rclone).
-
-In your compose.yaml... **NOTE: Ubuntu container is not required, and is only included for testing the rclone volume.**
-```yml
-services:
-  nzbdav:
-    image: ghcr.io/nzbdav-dev/nzbdav
-    environment:
-      - PUID=1000
-      - PGID=1000
-    ports:
-      - 3000:3000
-    volumes:
-      - /opt/stacks/nzbdav:/config
-    restart: unless-stopped
-
-  ubuntu:
-    image: ubuntu
-    command: sleep infinity
-    volumes:
-      - nzbdav:/mnt/nzbdav
-    environment:
-      - PUID=1000
-      - PGID=1000
-
-  radarr:
-    volumes:
-      - nzbdav:/mnt/nzbdav # Change target path based on SABnzbd rclone mount directory setting.
-
-# the rest of your config ...
-
-volumes:
-  nzbdav:
-    driver: rclone
-    driver_opts:
-      remote: 'nzb-dav:'
-      allow_other: 'true'
-      vfs_cache_mode: off
-      dir_cache_time: 1s
-      allow_non_empty: 'true'
-      uid: 1000
-      gid: 1000
-
-```
-
-To verify proper rclone volume creation:
-```
-$ docker exec -it <ubuntu container name> bash
-$ ls -la /mnt/nzbdav
-```
-
-## Accessing the rclone volume from a separate stack.
-Note: Your rclone volume **must** be already created by another stack, for example: 
-
-- Media backend: nzbdav + sonarr + radarr <--- This stack is creating the rclone volume
-- Media frontend: jellyfin <--- Mounts the external arrstack rclone volume
-
-To do so, see the bottom 11 lines in the example compose file in the above section.
-
-The example below uses ubuntu again, but the concept is the same for a different container such as sonarr.
-
-
-Find the stack name that creates the rclone volume:
-```
-$ docker-compose ls
-```
-
-Combine in the new separate compose file:
-```yml
-services:
-  ubuntu:
-    image: ubuntu
-    container_name: ubuntu
-    command: sleep infinity
-    volumes:
-      - nzbdav:/mnt/nzbdav # -- IMPORTANT --
-    environment:
-      - PUID=1000 # Must match UID value from volume in the stack creating the volume (driver_opts).
-      - PGID=1000 # Must match GID value from volume in the stack creating the volume (driver_opts).
-
-volumes:
-  nzbdav:
-    name: <STACK NAME>_nzbdav # See above for finding the stack name. # -- IMPORTANT --
-    external: true # -- IMPORTANT --
-```
-
 
 # More screenshots
 <img width="300" alt="onboarding" src="https://github.com/user-attachments/assets/4ca1bfed-3b98-4ff2-8108-59ed07a25591" />

@@ -11,7 +11,6 @@ public abstract class BaseStoreCollection : IStoreCollection
     // abstract members
     public abstract string Name { get; }
     public abstract string UniqueKey { get; }
-    public abstract DateTime CreatedAt { get; }
 
     protected abstract Task<StoreItemResult> CopyAsync(CopyRequest request);
     protected abstract Task<IStoreItem?> GetItemAsync(GetItemRequest request);

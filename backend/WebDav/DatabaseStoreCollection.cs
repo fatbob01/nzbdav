@@ -1,31 +1,31 @@
-﻿using Microsoft.AspNetCore.Http;
-using NWebDav.Server;
+﻿using NWebDav.Server;
 using NWebDav.Server.Stores;
-using NzbWebDAV.Clients.Usenet;
+using NzbWebDAV.Clients;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Extensions;
-using NzbWebDAV.Queue;
+using NzbWebDAV.Services;
 using NzbWebDAV.WebDav.Base;
 using NzbWebDAV.WebDav.Requests;
-using NzbWebDAV.Websocket;
 
 namespace NzbWebDAV.WebDav;
 
 public class DatabaseStoreCollection(
     DavItem davDirectory,
-    HttpContext httpContext,
     DavDatabaseClient dbClient,
     ConfigManager configManager,
-    UsenetStreamingClient usenetClient,
-    QueueManager queueManager,
-    WebsocketManager websocketManager
-) : BaseStoreReadonlyCollection
+    UsenetProviderManager usenetClient,
+    QueueManager queueManager
+) : BaseStoreCollection
 {
     public override string Name => davDirectory.Name;
     public override string UniqueKey => davDirectory.Id.ToString();
-    public override DateTime CreatedAt => davDirectory.CreatedAt;
+
+    protected override Task<StoreItemResult> CopyAsync(CopyRequest request)
+    {
+        throw new InvalidOperationException("Files and Directories cannot be copied.");
+    }
 
     protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
     {
@@ -41,14 +41,28 @@ public class DatabaseStoreCollection(
             .ToArray();
     }
 
+    protected override Task<StoreItemResult> CreateItemAsync(CreateItemRequest request)
+    {
+        throw new InvalidOperationException("NZBs can only be added to the `/nzbs` folder.");
+    }
+
+    protected override Task<StoreCollectionResult> CreateCollectionAsync(CreateCollectionRequest request)
+    {
+        throw new InvalidOperationException("Directories cannot be created.");
+    }
+
     protected override bool SupportsFastMove(SupportsFastMoveRequest request)
     {
         return false;
     }
 
+    protected override Task<StoreItemResult> MoveItemAsync(MoveItemRequest request)
+    {
+        throw new InvalidOperationException("Files and Directories cannot be moved.");
+    }
+
     protected override async Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
     {
-        // Cannot delete items if readonly-webdav is enabled
         if (configManager.IsEnforceReadonlyWebdavEnabled())
             return DavStatusCode.Forbidden;
 
@@ -61,7 +75,7 @@ public class DatabaseStoreCollection(
         if (davItem is null) return DavStatusCode.NotFound;
 
         // If the item is a file, simply delete it and we're done.
-        if (davItem.Type is DavItem.ItemType.NzbFile or DavItem.ItemType.RarFile or DavItem.ItemType.MultipartFile)
+        if (davItem.Type is DavItem.ItemType.NzbFile or DavItem.ItemType.RarFile)
         {
             dbClient.Ctx.Items.Remove(davItem);
             await dbClient.Ctx.SaveChangesAsync();
@@ -84,27 +98,16 @@ public class DatabaseStoreCollection(
     {
         return davItem.Type switch
         {
-            DavItem.ItemType.IdsRoot =>
-                new DatabaseStoreIdsCollection(
-                    davItem.Name, "", httpContext, dbClient, usenetClient, configManager),
             DavItem.ItemType.Directory when davItem.Id == DavItem.NzbFolder.Id =>
-                new DatabaseStoreWatchFolder(
-                    davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager),
+                new DatabaseStoreWatchFolder(davItem, dbClient, configManager, usenetClient, queueManager),
             DavItem.ItemType.Directory =>
-                new DatabaseStoreCollection(
-                    davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager),
+                new DatabaseStoreCollection(davItem, dbClient, configManager, usenetClient, queueManager),
             DavItem.ItemType.SymlinkRoot =>
-                new DatabaseStoreSymlinkCollection(
-                    davItem, dbClient, configManager),
+                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager),
             DavItem.ItemType.NzbFile =>
-                new DatabaseStoreNzbFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
+                new DatabaseStoreNzbFile(davItem, dbClient, usenetClient, configManager),
             DavItem.ItemType.RarFile =>
-                new DatabaseStoreRarFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
-            DavItem.ItemType.MultipartFile =>
-                new DatabaseStoreMultipartFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
+                new DatabaseStoreRarFile(davItem, dbClient, usenetClient, configManager),
             _ => throw new ArgumentException("Unrecognized directory child type.")
         };
     }

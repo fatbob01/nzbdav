@@ -10,7 +10,6 @@ public static class DavItemExtensions
         DavItem.SymlinkFolder.Id,
         DavItem.ContentFolder.Id,
         DavItem.NzbFolder.Id,
-        DavItem.IdsFolder.Id,
     ];
 
     public static bool IsProtected(this DavItem item)

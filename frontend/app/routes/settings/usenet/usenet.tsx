@@ -43,7 +43,7 @@ export function UsenetSettings({ config, setNewConfig, onReadyToSave }: UsenetSe
 
     const onTestButtonClicked = useCallback(async () => {
         setIsFetching(true);
-        const response = await fetch("/api/test-usenet-connection", {
+        const response = await fetch("/settings/test-usenet-connection", {
             method: "POST",
             body: (() => {
                 const form = new FormData();
@@ -55,7 +55,7 @@ export function UsenetSettings({ config, setNewConfig, onReadyToSave }: UsenetSe
                 return form;
             })()
         });
-        const isConnectionSuccessful = response.ok && ((await response.json())?.connected === true);
+        const isConnectionSuccessful = response.ok && ((await response.json()) === true);
         setIsFetching(false);
         setTestedConfig(config);
         setIsConnectionSuccessful(isConnectionSuccessful);
@@ -84,7 +84,6 @@ export function UsenetSettings({ config, setNewConfig, onReadyToSave }: UsenetSe
 
             <div className={styles["justify-right"]}>
                 <Form.Check
-                    id="use-ssl-checkbox"
                     type="checkbox"
                     label={`Use SSL`}
                     checked={config["usenet.use-ssl"] === "true"}
@@ -154,7 +153,7 @@ export function isUsenetSettingsUpdated(config: Record<string, string>, newConfi
         || config["usenet.connections-per-stream"] !== newConfig["usenet.connections-per-stream"]
 }
 
-export function isPositiveInteger(value: string) {
+function isPositiveInteger(value: string) {
     const num = Number(value);
     return Number.isInteger(num) && num > 0 && value.trim() === num.toString();
 }

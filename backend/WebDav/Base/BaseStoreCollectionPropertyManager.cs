@@ -20,7 +20,7 @@ public class BaseStoreCollectionPropertyManager() : PropertyManager<BaseStoreCol
         },
         new DavGetLastModified<BaseStoreCollection>
         {
-            Getter = x => x.CreatedAt
+            Getter = _ => default
         },
         new Win32FileAttributes<BaseStoreCollection>
         {

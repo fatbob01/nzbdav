@@ -1,74 +1,60 @@
-﻿using NzbWebDAV.Exceptions;
-using NzbWebDAV.Models;
-
-namespace NzbWebDAV.Utils;
+﻿namespace NzbWebDAV.Utils;
 
 public static class InterpolationSearch
 {
-    public static Result Find
+    public static async Task<int> Find
     (
-        long searchByte,
-        LongRange indexRangeToSearch,
-        LongRange byteRangeToSearch,
-        Func<int, LongRange> getByteRangeOfGuessedIndex
+        int startInclusive,
+        int endExclusive,
+        Func<int, Task<double?>> getGuessResult
     )
     {
-        return Find(
-            searchByte,
-            indexRangeToSearch,
-            byteRangeToSearch,
-            guess => new ValueTask<LongRange>(getByteRangeOfGuessedIndex(guess)),
-            SigtermUtil.GetCancellationToken()
-        ).GetAwaiter().GetResult();
+        var guess = (startInclusive + endExclusive) / 2;
+        return await Find(guess, startInclusive, endExclusive, getGuessResult);
     }
 
-    public static async Task<Result> Find
+    private static async Task<int> Find
     (
-        long searchByte,
-        LongRange indexRangeToSearch,
-        LongRange byteRangeToSearch,
-        Func<int, ValueTask<LongRange>> getByteRangeOfGuessedIndex,
-        CancellationToken cancellationToken
+        int guess,
+        int startInclusive,
+        int endExclusive,
+        Func<int, Task<double?>> guessResult
     )
     {
-        while (true)
+        const int maxIterations = 100;
+        var visitedGuesses = new HashSet<int>();
+        
+        for (int iteration = 0; iteration < maxIterations; iteration++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // make sure our search is even possible.
-            if (!byteRangeToSearch.Contains(searchByte) || indexRangeToSearch.Count <= 0)
-                throw new SeekPositionNotFoundException($"Corrupt file. Cannot find byte position {searchByte}.");
-
-            // make a guess
-            var searchByteFromStart = searchByte - byteRangeToSearch.StartInclusive;
-            var bytesPerIndex = (double)byteRangeToSearch.Count / indexRangeToSearch.Count;
-            var guessFromStart = (long)Math.Floor(searchByteFromStart / bytesPerIndex);
-            var guessedIndex = (int)(indexRangeToSearch.StartInclusive + guessFromStart);
-            var byteRangeOfGuessedIndex = await getByteRangeOfGuessedIndex(guessedIndex);
-
-            // make sure the result is within the range of our search space
-            if (!byteRangeOfGuessedIndex.IsContainedWithin(byteRangeToSearch))
-                throw new SeekPositionNotFoundException($"Corrupt file. Cannot find byte position {searchByte}.");
-
-            // if we guessed too low, adjust our lower bounds in order to search higher next time
-            if (byteRangeOfGuessedIndex.EndExclusive <= searchByte)
+            if (visitedGuesses.Contains(guess))
             {
-                indexRangeToSearch = indexRangeToSearch with { StartInclusive = guessedIndex + 1 };
-                byteRangeToSearch = byteRangeToSearch with { StartInclusive = byteRangeOfGuessedIndex.EndExclusive };
+                // If we've seen this guess before, we're in a loop - return it
+                return guess;
             }
-
-            // if we guessed too high, adjust our upper bounds in order to search lower next time
-            else if (byteRangeOfGuessedIndex.StartInclusive > searchByte)
-            {
-                indexRangeToSearch = indexRangeToSearch with { EndExclusive = guessedIndex };
-                byteRangeToSearch = byteRangeToSearch with { EndExclusive = byteRangeOfGuessedIndex.StartInclusive };
-            }
-
-            // if we guessed correctly, we're done
-            else if (byteRangeOfGuessedIndex.Contains(searchByte))
-                return new Result(guessedIndex, byteRangeOfGuessedIndex);
+            
+            visitedGuesses.Add(guess);
+            
+            var result = await guessResult(guess);
+            if (result == null) return guess;
+            
+            var newGuess = (int)((guess - startInclusive) * result.Value) + startInclusive;
+            if (newGuess >= endExclusive) newGuess = endExclusive - 1;
+            if (newGuess < startInclusive) newGuess = startInclusive;
+            
+            // Ensure we make progress when result indicates direction
+            if (result < 1 && newGuess >= guess) newGuess = Math.Max(startInclusive, guess - 1);
+            if (result > 1 && newGuess <= guess) newGuess = Math.Min(endExclusive - 1, guess + 1);
+            
+            if (newGuess < startInclusive || newGuess >= endExclusive)
+                return guess; // Return current guess instead of throwing
+            
+            if (newGuess == guess)
+                return guess;
+            
+            guess = newGuess;
         }
+        
+        // If we hit max iterations, return the last guess
+        return guess;
     }
-
-    public record Result(int FoundIndex, LongRange FoundByteRange);
 }

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using NzbWebDAV.Api.SabControllers.AddFile;
 using NzbWebDAV.Api.SabControllers.AddUrl;
+using NzbWebDAV.Api.SabControllers.ClearQueue;
 using NzbWebDAV.Api.SabControllers.GetConfig;
 using NzbWebDAV.Api.SabControllers.GetFullStatus;
 using NzbWebDAV.Api.SabControllers.GetHistory;
@@ -12,9 +13,8 @@ using NzbWebDAV.Api.SabControllers.RemoveFromQueue;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Extensions;
-using NzbWebDAV.Queue;
+using NzbWebDAV.Services;
 using NzbWebDAV.Utils;
-using NzbWebDAV.Websocket;
 
 namespace NzbWebDAV.Api.SabControllers;
 
@@ -23,8 +23,7 @@ namespace NzbWebDAV.Api.SabControllers;
 public class SabApiController(
     DavDatabaseClient dbClient,
     ConfigManager configManager,
-    QueueManager queueManager,
-    WebsocketManager websocketManager
+    QueueManager queueManager
 ) : ControllerBase
 {
     [HttpGet]
@@ -67,34 +66,27 @@ public class SabApiController(
         switch (HttpContext.GetQueryParam("mode"))
         {
             case "version":
-                return new GetVersionController(
-                    HttpContext, configManager);
+                return new GetVersionController(HttpContext, configManager);
             case "get_config":
-                return new GetConfigController(
-                    HttpContext, configManager);
+                return new GetConfigController(HttpContext, configManager);
             case "fullstatus":
-                return new GetFullStatusController(
-                    HttpContext, configManager);
+                return new GetFullStatusController(HttpContext, configManager);
             case "addfile":
-                return new AddFileController(
-                    HttpContext, dbClient, queueManager, configManager, websocketManager);
+                return new AddFileController(HttpContext, dbClient, queueManager, configManager);
             case "addurl":
-                return new AddUrlController(
-                    HttpContext, dbClient, queueManager, configManager, websocketManager);
+                return new AddUrlController(HttpContext, dbClient, queueManager, configManager);
 
             case "queue" when HttpContext.GetQueryParam("name") == "delete":
-                return new RemoveFromQueueController(
-                    HttpContext, dbClient, queueManager, configManager, websocketManager);
+                return new RemoveFromQueueController(HttpContext, dbClient, queueManager, configManager);
+            case "queue" when HttpContext.GetQueryParam("name") == "delete_all":
+                return new ClearQueueController(HttpContext, dbClient, configManager, queueManager);
             case "queue":
-                return new GetQueueController(
-                    HttpContext, dbClient, queueManager, configManager);
+                return new GetQueueController(HttpContext, dbClient, queueManager, configManager);
 
             case "history" when HttpContext.GetQueryParam("name") == "delete":
-                return new RemoveFromHistoryController(
-                    HttpContext, dbClient, configManager, websocketManager);
+                return new RemoveFromHistoryController(HttpContext, dbClient, configManager);
             case "history":
-                return new GetHistoryController(
-                    HttpContext, dbClient, configManager);
+                return new GetHistoryController(HttpContext, dbClient, configManager);
 
             default:
                 throw new BadHttpRequestException("Invalid mode");

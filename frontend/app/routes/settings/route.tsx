@@ -1,40 +1,52 @@
 import type { Route } from "./+types/route";
+import { Layout } from "../_index/components/layout/layout";
+import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
+import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
-import { Tabs, Tab, Button, Form } from "react-bootstrap"
+import { Tabs, Tab, Button } from "react-bootstrap"
 import { backendClient } from "~/clients/backend-client.server";
-import { isUsenetSettingsUpdated, UsenetSettings } from "./usenet/usenet";
-import React, { useEffect } from "react";
+import { redirect } from "react-router";
+import { sessionStorage } from "~/auth/authentication.server";
+import { UsenetProviders } from "./usenet-providers/usenet-providers";
+
+// Helper function to check if provider settings have been updated
+function isProvidersSettingsUpdated(config: Record<string, string>, newConfig: Record<string, string>): boolean {
+    // Check if provider count changed
+    if (config["usenet.providers.count"] !== newConfig["usenet.providers.count"]) return true;
+    if (config["usenet.providers.primary"] !== newConfig["usenet.providers.primary"]) return true;
+    // Check global connections-per-stream
+    if (config["usenet.connections-per-stream"] !== newConfig["usenet.connections-per-stream"]) return true;
+
+    // Check all provider-specific keys
+    const allKeys = Object.keys(newConfig);
+    const providerKeys = allKeys.filter(key => key.startsWith("usenet.provider."));
+    
+    return providerKeys.some(key => config[key] !== newConfig[key]);
+}
+import React from "react";
 import { isSabnzbdSettingsUpdated, isSabnzbdSettingsValid, SabnzbdSettings } from "./sabnzbd/sabnzbd";
 import { isWebdavSettingsUpdated, isWebdavSettingsValid, WebdavSettings } from "./webdav/webdav";
-import { isArrsSettingsUpdated, isArrsSettingsValid, ArrsSettings } from "./arrs/arrs";
-import { Maintenance } from "./maintenance/maintenance";
-import { isRepairsSettingsUpdated, isRepairsSettingsValid, RepairsSettings } from "./repairs/repairs";
 
 const defaultConfig = {
     "api.key": "",
     "api.categories": "",
-    "api.max-queue-connections": "",
     "api.ensure-importable-video": "true",
-    "api.ensure-article-existence": "false",
-    "api.ignore-history-limit": "true",
-    "usenet.host": "",
-    "usenet.port": "",
-    "usenet.use-ssl": "false",
-    "usenet.connections": "",
+    // Multi-provider configuration
+    "usenet.providers.count": "0",
+    "usenet.providers.primary": "0",
     "usenet.connections-per-stream": "",
     "webdav.user": "",
     "webdav.pass": "",
-    "webdav.show-hidden-files": "false",
     "webdav.enforce-readonly": "true",
-    "webdav.preview-par2-files": "false",
     "rclone.mount-dir": "",
-    "media.library-dir": "",
-    "arr.instances": "{\"RadarrInstances\":[],\"SonarrInstances\":[],\"QueueRules\":[]}",
-    "repair.connections": "",
-    "repair.enable": "false",
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+    // ensure user is logged in
+    let session = await sessionStorage.getSession(request.headers.get("cookie"));
+    let user = session.get("user");
+    if (!user) return redirect("/login");
+
     // fetch the config items
     var configItems = await backendClient.getConfig(Object.keys(defaultConfig));
 
@@ -67,7 +79,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Settings(props: Route.ComponentProps) {
     return (
-        <Body config={props.loaderData.config} />
+        <Layout
+            topNavComponent={TopNavigation}
+            bodyChild={<Body config={props.loaderData.config} />}
+            leftNavChild={<LeftNavigation />}
+        />
     );
 }
 
@@ -76,27 +92,20 @@ type BodyProps = {
 };
 
 function Body(props: BodyProps) {
-    // stateful variables
     const [config, setConfig] = React.useState(props.config);
     const [newConfig, setNewConfig] = React.useState(config);
     const [isProvidersReadyToSave, setIsProvidersReadyToSave] = React.useState(false);
     const [isSaving, setIsSaving] = React.useState(false);
     const [isSaved, setIsSaved] = React.useState(false);
-    const [activeTab, setActiveTab] = React.useState('usenet');
 
-    // derived variables
-    const iseUsenetUpdated = isUsenetSettingsUpdated(config, newConfig);
+    const isProvidersUpdated = isProvidersSettingsUpdated(config, newConfig);
     const isSabnzbdUpdated = isSabnzbdSettingsUpdated(config, newConfig);
     const isWebdavUpdated = isWebdavSettingsUpdated(config, newConfig);
-    const isArrsUpdated = isArrsSettingsUpdated(config, newConfig);
-    const isRepairsUpdated = isRepairsSettingsUpdated(config, newConfig);
-    const isUpdated = iseUsenetUpdated || isSabnzbdUpdated || isWebdavUpdated || isArrsUpdated || isRepairsUpdated;
+    const isUpdated = isProvidersUpdated || isSabnzbdUpdated || isWebdavUpdated;
 
-    const usenetTitle = iseUsenetUpdated ? "✏️ Usenet" : "Usenet";
-    const sabnzbdTitle = isSabnzbdUpdated ? "✏️ SABnzbd " : "SABnzbd";
-    const webdavTitle = isWebdavUpdated ? "✏️ WebDAV" : "WebDAV";
-    const arrsTitle = isArrsUpdated ? "✏️ Radarr/Sonarr" : "Radarr/Sonarr";
-    const repairsTitle = isRepairsUpdated ? "✏️ Repairs" : "Repairs";
+    const providersTitle = isProvidersUpdated ? "Usenet Providers ✏️" : "Usenet Providers";
+    const sabnzbdTitle = isSabnzbdUpdated ? "SABnzbd ✏️" : "SABnzbd";
+    const webdavTitle = isWebdavUpdated ? "WebDAV ✏️" : "WebDAV";
 
     const saveButtonLabel = isSaving ? "Saving..."
         : !isUpdated && isSaved ? "Saved ✅"
@@ -104,8 +113,6 @@ function Body(props: BodyProps) {
         : isProvidersUpdated && !isProvidersReadyToSave ? "Must configure at least one enabled provider"
         : isSabnzbdUpdated && !isSabnzbdSettingsValid(newConfig) ? "Invalid SABnzbd settings"
         : isWebdavUpdated && !isWebdavSettingsValid(newConfig) ? "Invalid WebDAV settings"
-        : isArrsUpdated && !isArrsSettingsValid(newConfig) ? "Invalid Arrs settings"
-        : isRepairsUpdated && !isRepairsSettingsValid(newConfig) ? "Invalid Repairs settings"
         : "Save";
     const saveButtonVariant = saveButtonLabel === "Save" ? "primary"
         : saveButtonLabel === "Saved ✅" ? "success"
@@ -144,27 +151,17 @@ function Body(props: BodyProps) {
     return (
         <div className={styles.container}>
             <Tabs
-                activeKey={activeTab}
-                onSelect={x => setActiveTab(x!)}
+                defaultActiveKey="providers"
                 className={styles.tabs}
             >
-                <Tab eventKey="usenet" title={usenetTitle}>
-                    <UsenetSettings config={newConfig} setNewConfig={setNewConfig} onReadyToSave={onUsenetSettingsReadyToSave} />
+                <Tab eventKey="providers" title={providersTitle}>
+                    <UsenetProviders config={newConfig} setNewConfig={setNewConfig} onReadyToSave={onProvidersReadyToSave}/>
                 </Tab>
                 <Tab eventKey="sabnzbd" title={sabnzbdTitle}>
                     <SabnzbdSettings config={newConfig} setNewConfig={setNewConfig} />
                 </Tab>
                 <Tab eventKey="webdav" title={webdavTitle}>
                     <WebdavSettings config={newConfig} setNewConfig={setNewConfig} />
-                </Tab>
-                <Tab eventKey="arrs" title={arrsTitle}>
-                    <ArrsSettings config={newConfig} setNewConfig={setNewConfig} />
-                </Tab>
-                <Tab eventKey="repairs" title={repairsTitle}>
-                    <RepairsSettings config={newConfig} setNewConfig={setNewConfig} />
-                </Tab>
-                <Tab eventKey="maintenance" title="Maintenance">
-                    <Maintenance savedConfig={config} />
                 </Tab>
             </Tabs>
             <hr />

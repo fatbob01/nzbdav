@@ -1,13 +1,15 @@
 import type { Route } from "./+types/route";
+import { Layout } from "../_index/components/layout/layout";
+import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
+import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import { Breadcrumbs } from "./breadcrumbs/breadcrumbs";
 import styles from "./route.module.css"
-import { Link, redirect, useLocation, useNavigation } from "react-router";
+import { Link, redirect, useLocation, useNavigate } from "react-router";
 import { backendClient, type DirectoryItem } from "~/clients/backend-client.server";
+import { sessionStorage } from "~/auth/authentication.server";
 import { useCallback } from "react";
 import { lookup as getMimeType } from 'mime-types';
 import { getDownloadKey } from "~/auth/downloads.server";
-import { Loading } from "../_index/components/loading/loading";
-import { formatFileSize } from "~/utils/file-size";
 
 export type ExplorePageData = {
     parentDirectories: string[],
@@ -21,13 +23,17 @@ export type ExploreFile = DirectoryItem & {
 
 
 export async function loader({ request }: Route.LoaderArgs) {
-    // if path ends in trailing slash, remove it
-    if (request.url.endsWith('/')) return redirect(request.url.slice(0, -1));
+    let session = await sessionStorage.getSession(request.headers.get("cookie"));
+    let user = session.get("user");
+    if (!user) return redirect("/login");
 
-    // load items from backend
-    let path = getWebdavPath(new URL(request.url).pathname);
+    let path = new URL(request.url).pathname;
+    if (path.startsWith("/")) path = path.slice(1);
+    if (path.startsWith("explore")) path = path.slice(7);
+    if (path.startsWith("/")) path = path.slice(1);
+
     return {
-        parentDirectories: getParentDirectories(path),
+        parentDirectories: path == "" ? [] : path.split('/'),
         items: (await backendClient.listWebdavDirectory(path)).map(x => {
             if (x.isDirectory) return x;
             return {
@@ -39,79 +45,58 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
 }
 
+
 export default function Explore({ loaderData }: Route.ComponentProps) {
     return (
-        <Body {...loaderData} />
+        <Layout
+            topNavComponent={TopNavigation}
+            bodyChild={<Body {...loaderData} />}
+            leftNavChild={<LeftNavigation />}
+        />
     );
 }
 
-function Body(props: ExplorePageData) {
+function Body({ parentDirectories, items }: ExplorePageData) {
     const location = useLocation();
-    const navigation = useNavigation();
-    const isNavigating = Boolean(navigation.location);
-
-    const items = props.items;
-    const parentDirectories = isNavigating
-        ? getParentDirectories(getWebdavPath(navigation.location!.pathname))
-        : props.parentDirectories;
+    const navigate = useNavigate();
 
     const getDirectoryPath = useCallback((directoryName: string) => {
         return `${location.pathname}/${directoryName}`
-    }, [location.pathname]);
+    }, [location.pathname, navigate]);
 
     const getFilePath = useCallback((file: ExploreFile) => {
-        var pathname = getWebdavPath(location.pathname);
+        var pathname = location.pathname;
+        if (pathname.startsWith("/")) pathname = pathname.slice(1);
+        if (pathname.startsWith("explore")) pathname = pathname.slice(7);
+        if (pathname.startsWith("/")) pathname = pathname.slice(1);
         return `/view/${pathname}/${file.name}?downloadKey=${file.downloadKey}`;
-    }, [location.pathname]);
+    }, [location.pathname, navigate]);
 
     return (
         <div className={styles.container}>
             <Breadcrumbs parentDirectories={parentDirectories} />
-            {!isNavigating &&
-                <div>
-                    {items.filter(x => x.isDirectory).map((x, index) =>
-                        <Link key={`${index}_dir_item`} to={getDirectoryPath(x.name)} className={getClassName(x)}>
-                            <div className={styles["directory-icon"]} />
-                            <div className={styles["item-name"]}>{x.name}</div>
-                        </Link>
-                    )}
-                    {items.filter(x => !x.isDirectory).map((x, index) =>
-                        <a key={`${index}_file_item`} href={getFilePath(x as ExploreFile)} className={getClassName(x)}>
-                            <div className={getIcon(x as ExploreFile)} />
-                            <div className={styles["item-info"]}>
-                                <div className={styles["item-name"]}>{x.name}</div>
-                                <div className={styles["item-size"]}>{formatFileSize(x.size)}</div>
-                            </div>
-                        </a>
-                    )}
-                </div>
-            }
-            {isNavigating && <Loading className={styles.loading} />}
+            <div>
+                {items.filter(x => x.isDirectory).map((x, index) =>
+                    <Link key={`${index}_dir_item`} to={getDirectoryPath(x.name)} className={styles.item}>
+                        <div className={styles["directory-icon"]} />
+                        <div className={styles["item-name"]}>{x.name}</div>
+                    </Link>
+                )}
+                {items.filter(x => !x.isDirectory).map((x, index) =>
+                    <a key={`${index}_file_item`} href={getFilePath(x as ExploreFile)} className={styles.item}>
+                        <div className={getIcon(x as ExploreFile)} />
+                        <div className={styles["item-name"]}>{x.name}</div>
+                    </a>
+                )}
+            </div>
         </div >
     );
 }
+
 
 function getIcon(file: ExploreFile) {
     if (file.name.toLowerCase().endsWith(".mkv")) return styles["video-icon"];
     if (file.mimeType && file.mimeType.startsWith("video")) return styles["video-icon"];
     if (file.mimeType && file.mimeType.startsWith("image")) return styles["image-icon"];
     return styles["file-icon"];
-}
-
-function getWebdavPath(pathname: string): string {
-    pathname = decodeURIComponent(pathname);
-    if (pathname.startsWith("/")) pathname = pathname.slice(1);
-    if (pathname.startsWith("explore")) pathname = pathname.slice(7);
-    if (pathname.startsWith("/")) pathname = pathname.slice(1);
-    return pathname;
-}
-
-function getParentDirectories(webdavPath: string): string[] {
-    return webdavPath == "" ? [] : webdavPath.split('/');
-}
-
-function getClassName(item: DirectoryItem | ExploreFile) {
-    let className = styles.item;
-    if (item.name.startsWith('.')) className += " " + styles.hidden;
-    return className;
 }

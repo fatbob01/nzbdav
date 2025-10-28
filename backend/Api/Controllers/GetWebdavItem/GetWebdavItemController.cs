@@ -1,30 +1,25 @@
-﻿using System.Text;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using NWebDav.Server.Stores;
-using NzbWebDAV.Config;
 using NzbWebDAV.Extensions;
-using NzbWebDAV.Par2Recovery;
 using NzbWebDAV.WebDav;
 
 namespace NzbWebDAV.Api.Controllers.GetWebdavItem;
 
 [ApiController]
 [Route("view/{*path}")]
-public class ListWebdavDirectoryController(DatabaseStore store, ConfigManager configManager) : ControllerBase
+public class ListWebdavDirectoryController(DatabaseStore store) : BaseApiController
 {
     private static readonly FileExtensionContentTypeProvider MimeTypeProvider = new();
+
+    protected override bool RequiresAuthentication => false;
 
     private async Task<Stream> GetWebdavItem(GetWebdavItemRequest request)
     {
         var item = await store.GetItemAsync(request.Item, HttpContext.RequestAborted);
         if (item is null) throw new BadHttpRequestException("The file does not exist.");
         if (item is IStoreCollection) throw new BadHttpRequestException("The file does not exist.");
-
-        // handle par2 preview
-        if (Path.GetExtension(item.Name).ToLower() == ".par2" && configManager.IsPreviewPar2FilesEnabled())
-            return await GetPar2PreviewStream(item);
 
         // get the file stream and set the file-size in header
         var stream = await item.GetReadableStreamAsync(HttpContext.RequestAborted);
@@ -57,19 +52,12 @@ public class ListWebdavDirectoryController(DatabaseStore store, ConfigManager co
         return stream;
     }
 
-    [HttpGet]
-    public async Task HandleRequest()
+    protected override async Task<IActionResult> HandleRequest()
     {
-        try
-        {
-            var request = new GetWebdavItemRequest(HttpContext);
-            await using var response = await GetWebdavItem(request);
-            await response.CopyToAsync(Response.Body, bufferSize: 1024, HttpContext.RequestAborted);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            Response.StatusCode = 401;
-        }
+        var request = new GetWebdavItemRequest(HttpContext);
+        await using var response = await GetWebdavItem(request);
+        await response.CopyToAsync(Response.Body, bufferSize: 1024, HttpContext.RequestAborted);
+        return new EmptyResult();
     }
 
     private static string GetContentType(string item)
@@ -80,13 +68,5 @@ public class ListWebdavDirectoryController(DatabaseStore store, ConfigManager co
             : extension == ".nfo" ? "text/plain"
             : MimeTypeProvider.TryGetContentType(Path.GetFileName(item), out var mimeType) ? mimeType
             : "application/octet-stream";
-    }
-
-    private async Task<Stream> GetPar2PreviewStream(IStoreItem item)
-    {
-        Response.Headers.ContentType = "text/plain";
-        await using var stream = await item.GetReadableStreamAsync(HttpContext.RequestAborted);
-        var fileDescriptors = await Par2.ReadFileDescriptions(stream, HttpContext.RequestAborted).GetAllAsync();
-        return new MemoryStream(Encoding.UTF8.GetBytes(fileDescriptors.ToIndentedJson()));
     }
 }
