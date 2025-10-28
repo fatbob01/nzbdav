@@ -1,138 +1,149 @@
-import type { QueueResponse } from "~/clients/backend-client.server"
-import styles from "./queue-table.module.css"
-import { Badge, Button, OverlayTrigger, ProgressBar, Table, Tooltip } from "react-bootstrap"
-import { Form } from "react-router";
+import pageStyles from "../../route.module.css"
+import { ActionButton } from "../action-button/action-button"
+import { PageRow, PageTable } from "../page-table/page-table"
+import { useCallback, useState } from "react"
+import { ConfirmModal } from "../confirm-modal/confirm-modal"
+import type { PresentationQueueSlot } from "../../route"
+import type { TriCheckboxState } from "../tri-checkbox/tri-checkbox"
 
 export type QueueTableProps = {
-    queue: QueueResponse
+    queueSlots: PresentationQueueSlot[],
+    onIsSelectedChanged: (nzo_ids: Set<string>, isSelected: boolean) => void,
+    onIsRemovingChanged: (nzo_ids: Set<string>, isRemoving: boolean) => void,
+    onRemoved: (nzo_ids: Set<string>) => void,
 }
 
-export function QueueTable({ queue }: QueueTableProps) {
+export function QueueTable({ queueSlots, onIsSelectedChanged, onIsRemovingChanged, onRemoved }: QueueTableProps) {
+    const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
+    var selectedCount = queueSlots.filter(x => !!x.isSelected).length;
+    var headerCheckboxState: TriCheckboxState = selectedCount === 0 ? 'none' : selectedCount === queueSlots.length ? 'all' : 'some';
+
+    const onSelectAll = useCallback((isSelected: boolean) => {
+        onIsSelectedChanged(new Set<string>(queueSlots.map(x => x.nzo_id)), isSelected);
+    }, [queueSlots, onIsSelectedChanged]);
+
+    const onRemove = useCallback(() => {
+        setIsConfirmingRemoval(true);
+    }, [setIsConfirmingRemoval]);
+
+    const onCancelRemoval = useCallback(() => {
+        setIsConfirmingRemoval(false);
+    }, [setIsConfirmingRemoval]);
+
+    const onConfirmRemoval = useCallback(async () => {
+        var nzo_ids = new Set<string>(queueSlots.filter(x => !!x.isSelected).map(x => x.nzo_id));
+        setIsConfirmingRemoval(false);
+        onIsRemovingChanged(nzo_ids, true);
+        try {
+            const url = `/api?mode=queue&name=delete`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json;charset=UTF-8',
+                },
+                body: JSON.stringify({ nzo_ids: Array.from(nzo_ids) }),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === true) {
+                    onRemoved(nzo_ids);
+                    return;
+                }
+            }
+        } catch { }
+        onIsRemovingChanged(nzo_ids, false);
+    }, [queueSlots, setIsConfirmingRemoval, onIsRemovingChanged, onRemoved]);
+
     return (
-        <div>
-            <div className={styles["table-actions"]}>
-                <Form method="post">
-                    <Button variant="danger" type="submit" name="intent" value="clear-queue">
-                        Clear Queue
-                    </Button>
-                </Form>
+        <>
+            <div className={pageStyles["section-title"]}>
+                <h3>Queue</h3>
+                {headerCheckboxState !== 'none' &&
+                    <ActionButton type="delete" onClick={onRemove} />
+                }
             </div>
-        <Table responsive>
-            <thead>
-                <tr>
-                    <th className={styles["first-table-header"]}>FileName</th>
-                    <th className={styles["table-header"]}>Category</th>
-                    <th className={styles["table-header"]}>Progress</th>
-                    <th className={styles["table-header"]}>Status</th>
-                    <th className={styles["last-table-header"]}>Size</th>
-                </tr>
-            </thead>
-            <tbody>
-                {queue.slots.map((slot, index) =>
-                    <tr key={index} className={styles["table-row"]}>
-                        <td className={styles["row-title"]}>
-                            <div className={styles.truncate}>
-                                {slot.filename}
-                            </div>
-                        </td>
-                        <td className={styles["row-column"]}>
-                            <CategoryBadge category={slot.cat} />
-                        </td>
-                        <td className={styles["row-column"]}>
-                            <QueueProgressBar percentage={slot.percentage} status={slot.status} />
-                        </td>
-                        <td className={styles["row-column"]}>
-                            <StatusBadge status={slot.status} />
-                        </td>
-                        <td className={styles["row-column"]}>
-                            <div className={styles["size-info"]}>
-                                <div className={styles["size-total"]}>
-                                    {formatFileSize(Number(slot.mb) * 1024 * 1024)}
-                                </div>
-                                {slot.status.toLowerCase() === 'downloading' && (
-                                    <div className={styles["size-remaining"]}>
-                                        {formatFileSize(Number(slot.mbleft) * 1024 * 1024)} left
-                                    </div>
-                                )}
-                            </div>
-                        </td>
-                    </tr>
-                )}
-            </tbody>
-        </Table>
-    </div>
+            <div style={{ minHeight: "300px" }}>
+                <PageTable headerCheckboxState={headerCheckboxState} onHeaderCheckboxChange={onSelectAll} striped>
+                    {queueSlots.map(slot =>
+                        <QueueRow
+                            key={slot.nzo_id}
+                            slot={slot}
+                            onIsSelectedChanged={(id, isSelected) => onIsSelectedChanged(new Set<string>([id]), isSelected)}
+                            onIsRemovingChanged={(id, isRemoving) => onIsRemovingChanged(new Set<string>([id]), isRemoving)}
+                            onRemoved={(id) => onRemoved(new Set([id]))}
+                        />
+                    )}
+                </PageTable>
+            </div>
+
+            <ConfirmModal
+                show={isConfirmingRemoval}
+                title="Remove From Queue?"
+                message={`${selectedCount} item(s) will be removed`}
+                onConfirm={onConfirmRemoval}
+                onCancel={onCancelRemoval} />
+        </>
     );
 }
 
-export function CategoryBadge({ category }: { category: string }) {
-    const categoryLower = category?.toLowerCase();
-    let variant = 'secondary';
-    if (categoryLower === 'movies') variant = 'primary';
-    if (categoryLower === 'tv') variant = 'info';
-    if (categoryLower === 'music') variant = 'warning';
-    return (
-        <Badge 
-            bg={variant} 
-            className={styles["category-badge"]}
-        >
-            {categoryLower}
-        </Badge>
-    );
+type QueueRowProps = {
+    slot: PresentationQueueSlot
+    onIsSelectedChanged: (nzo_id: string, isSelected: boolean) => void,
+    onIsRemovingChanged: (nzo_id: string, isRemoving: boolean) => void,
+    onRemoved: (nzo_id: string) => void
 }
 
-export function StatusBadge({ status, error }: { status: string, error?: string }) {
-    const statusLower = status?.toLowerCase();
-    let variant = "secondary";
-    if (statusLower === "completed") variant = "success";
-    if (statusLower === "failed") variant = "danger";
-    if (statusLower === "downloading") variant = "primary";
-    if (statusLower === "queued") variant = "info";
-    if (statusLower === "paused") variant = "warning";
+export function QueueRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onRemoved }: QueueRowProps) {
+    // state
+    const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
 
-    if (error?.startsWith("Article with message-id")) error = "Missing articles";
-    const badgeClass = `${styles["status-badge"]} ${statusLower === "failed" ? styles["failure-badge"] : ""}`;
-    const overlay = statusLower == "failed"
-        ? <Tooltip>{error}</Tooltip>
-        : <></>;
+    // events
+    const onRemove = useCallback(() => {
+        setIsConfirmingRemoval(true);
+    }, [setIsConfirmingRemoval]);
 
+    const onCancelRemoval = useCallback(() => {
+        setIsConfirmingRemoval(false);
+    }, [setIsConfirmingRemoval]);
+
+    const onConfirmRemoval = useCallback(async () => {
+        setIsConfirmingRemoval(false);
+        onIsRemovingChanged(slot.nzo_id, true);
+        try {
+            const url = '/api?mode=queue&name=delete'
+                + `&value=${encodeURIComponent(slot.nzo_id)}`;
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === true) {
+                    onRemoved(slot.nzo_id);
+                    return;
+                }
+            }
+        } catch { }
+        onIsRemovingChanged(slot.nzo_id, false);
+    }, [slot.nzo_id, setIsConfirmingRemoval, onIsRemovingChanged, onRemoved]);
+
+    // view
     return (
-        <OverlayTrigger placement="top" overlay={overlay} trigger="click">
-            <Badge bg={variant} className={badgeClass}>
-                {statusLower}
-            </Badge>
-        </OverlayTrigger>
-    );
-}
-
-export function QueueProgressBar({ percentage, status }: { percentage: string, status: string }) {
-    const progressValue = parseFloat(percentage) || 0;
-    const statusLower = status?.toLowerCase();
-    
-    let variant = "secondary";
-    if (statusLower === "downloading") variant = "primary";
-    if (statusLower === "completed") variant = "success";
-    if (statusLower === "failed") variant = "danger";
-    
-    return (
-        <div className={styles["progress-container"]}>
-            <ProgressBar 
-                now={progressValue} 
-                variant={variant}
-                className={styles["progress-bar"]}
+        <>
+            <PageRow
+                isSelected={!!slot.isSelected}
+                isRemoving={!!slot.isRemoving}
+                name={slot.filename}
+                category={slot.cat}
+                status={slot.status}
+                percentage={slot.true_percentage}
+                fileSizeBytes={Number(slot.mb) * 1024 * 1024}
+                actions={<ActionButton type="delete" disabled={!!slot.isRemoving} onClick={onRemove} />}
+                onRowSelectionChanged={isSelected => onIsSelectedChanged(slot.nzo_id, isSelected)}
             />
-            <span className={styles["progress-text"]}>
-                {progressValue.toFixed(1)}%
-            </span>
-        </div>
-    );
-}
-
-export function formatFileSize(bytes: number) {
-    var suffix = "B";
-    if (bytes >= 1024) { bytes /= 1024; suffix = "KB"; }
-    if (bytes >= 1024) { bytes /= 1024; suffix = "MB"; }
-    if (bytes >= 1024) { bytes /= 1024; suffix = "GB"; }
-    if (bytes >= 1024) { bytes /= 1024; suffix = "TB"; }
-    if (bytes >= 1024) { bytes /= 1024; suffix = "PB"; }
-    return `${bytes.toFixed(2)} ${suffix}`;
+            <ConfirmModal
+                show={isConfirmingRemoval}
+                title="Remove From Queue?"
+                message={slot.filename}
+                onConfirm={onConfirmRemoval}
+                onCancel={onCancelRemoval} />
+        </>
+    )
 }

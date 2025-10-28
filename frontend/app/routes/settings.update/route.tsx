@@ -12,13 +12,13 @@ export async function action({ request }: Route.ActionArgs) {
     // get the ConfigItems to update
     const formData = await request.formData();
     const configJson = formData.get("config")!.toString();
-    const config = JSON.parse(configJson) as Record<string, unknown>;
+    const config = JSON.parse(configJson);
     const configItems: ConfigItem[] = [];
-    for (const [key, value] of Object.entries(config)) {
+    for (const [key, value] of Object.entries<string>(config)) {
         configItems.push({
             configName: key,
-            configValue: String(value)
-        });
+            configValue: value
+        })
     }
 
     // update the config items

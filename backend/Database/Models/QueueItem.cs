@@ -13,7 +13,6 @@ public class QueueItem
     public PriorityOption Priority { get; set; }
     public PostProcessingOption PostProcessing { get; set; }
     public DateTime? PauseUntil { get; set; }
-    public int RetryCount { get; set; } = 0;
 
     public enum PriorityOption
     {

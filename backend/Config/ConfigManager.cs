@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Utils;
-using System.Globalization;
 
 namespace NzbWebDAV.Config;
 
@@ -31,6 +31,12 @@ public class ConfigManager
         {
             return _config.TryGetValue(configName, out string? value) ? value : null;
         }
+    }
+
+    public T? GetConfigValue<T>(string configName)
+    {
+        var rawValue = StringUtil.EmptyToNull(GetConfigValue(configName));
+        return rawValue == null ? default : JsonSerializer.Deserialize<T>(rawValue);
     }
 
     public void UpdateValues(List<ConfigItem> configItems)
@@ -70,6 +76,14 @@ public class ConfigManager
                ?? "audio,software,tv,movies";
     }
 
+    public int GetMaxConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("usenet.connections"))
+            ?? "10"
+        );
+    }
+
     public int GetConnectionsPerStream()
     {
         return int.Parse(
@@ -77,92 +91,6 @@ public class ConfigManager
             ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("CONNECTIONS_PER_STREAM"))
             ?? "1"
         );
-    }
-
-    /// <summary>
-    /// Gets the maximum number of Usenet connections allowed. Defaults to 10.
-    /// </summary>
-    public int GetMaxConnections()
-    {
-        var providerIndex = GetPrimaryProviderIndex();
-        return int.Parse(
-            StringUtil.EmptyToNull(GetProviderConfigValue(providerIndex, "connections"))
-            ?? StringUtil.EmptyToNull(GetConfigValue("usenet.connections"))
-            ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("MAX_CONNECTIONS"))
-            ?? "10",
-            CultureInfo.InvariantCulture
-        );
-    }
-
-    /// <summary>
-    /// Gets the maximum number of queue connections allowed for API operations. Defaults to 4.
-    /// </summary>
-    public int GetMaxQueueConnections()
-    {
-        return int.Parse(
-            StringUtil.EmptyToNull(GetConfigValue("api.max-queue-connections"))
-            ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("MAX_QUEUE_CONNECTIONS"))
-            ?? "4",
-            CultureInfo.InvariantCulture
-        );
-    }
-
-    public int GetProviderCount()
-    {
-        var countStr = GetConfigValue("usenet.providers.count");
-        return int.TryParse(countStr, out var count) ? count : 0;
-    }
-
-    public int GetPrimaryProviderIndex()
-    {
-        var primaryStr = GetConfigValue("usenet.providers.primary");
-        return int.TryParse(primaryStr, out var index) ? index : 0;
-    }
-
-    public string? GetProviderConfigValue(int providerIndex, string property)
-    {
-        return GetConfigValue($"usenet.provider.{providerIndex}.{property}");
-    }
-
-    public bool IsProviderEnabled(int providerIndex)
-    {
-        var enabled = GetProviderConfigValue(providerIndex, "enabled");
-        return bool.TryParse(enabled, out var result) && result;
-    }
-
-    public Dictionary<string, string> GetProviderConfiguration(int providerIndex)
-    {
-        var config = new Dictionary<string, string>();
-        var properties = new[] { "name", "host", "port", "use-ssl", "connections", "user", "pass", "priority", "enabled" };
-        
-        foreach (var property in properties)
-        {
-            var value = GetProviderConfigValue(providerIndex, property);
-            if (!string.IsNullOrEmpty(value))
-            {
-                config[property] = value;
-            }
-        }
-        
-        return config;
-    }
-
-    public List<Dictionary<string, string>> GetAllProviderConfigurations()
-    {
-        var providers = new List<Dictionary<string, string>>();
-        var count = GetProviderCount();
-        
-        for (int i = 0; i < count; i++)
-        {
-            var providerConfig = GetProviderConfiguration(i);
-            if (providerConfig.Count > 0)
-            {
-                providerConfig["index"] = i.ToString();
-                providers.Add(providerConfig);
-            }
-        }
-        
-        return providers;
     }
 
     public string? GetWebdavUser()
@@ -187,11 +115,77 @@ public class ConfigManager
         return (configValue != null ? bool.Parse(configValue) : defaultValue);
     }
 
+    public bool ShowHiddenWebdavFiles()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.show-hidden-files"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public string? GetLibraryDir()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("media.library-dir"));
+    }
+
+    public int GetMaxQueueConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("api.max-queue-connections"))
+            ?? GetMaxConnections().ToString()
+        );
+    }
+
     public bool IsEnforceReadonlyWebdavEnabled()
     {
         var defaultValue = true;
         var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.enforce-readonly"));
-        return configValue != null ? bool.Parse(configValue) : defaultValue;
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsEnsureArticleExistenceEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.ensure-article-existence"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsPreviewPar2FilesEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("webdav.preview-par2-files"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public bool IsIgnoreSabHistoryLimitEnabled()
+    {
+        var defaultValue = true;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.ignore-history-limit"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    public int GetMaxRepairConnections()
+    {
+        return int.Parse(
+            StringUtil.EmptyToNull(GetConfigValue("repair.connections"))
+            ?? "0"
+        );
+    }
+
+    public bool IsRepairJobEnabled()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("repair.enable"));
+        var isRepairJobEnabled = (configValue != null ? bool.Parse(configValue) : defaultValue);
+        return isRepairJobEnabled
+               && GetMaxConnections() > 0
+               && GetLibraryDir() != null
+               && GetArrConfig().GetInstanceCount() > 0;
+    }
+
+    public ArrConfig GetArrConfig()
+    {
+        var defaultValue = new ArrConfig();
+        return GetConfigValue<ArrConfig>("arr.instances") ?? defaultValue;
     }
 
     public class ConfigEventArgs : EventArgs

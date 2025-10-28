@@ -1,10 +1,13 @@
 ﻿using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbWebDAV.Api.SabControllers.GetQueue;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
-using NzbWebDAV.Services;
+using NzbWebDAV.Extensions;
+using NzbWebDAV.Queue;
+using NzbWebDAV.Websocket;
 using Usenet.Nzb;
 
 namespace NzbWebDAV.Api.SabControllers.AddFile;
@@ -13,13 +16,15 @@ public class AddFileController(
     HttpContext httpContext,
     DavDatabaseClient dbClient,
     QueueManager queueManager,
-    ConfigManager configManager
+    ConfigManager configManager,
+    WebsocketManager websocketManager
 ) : SabApiController.BaseController(httpContext, configManager)
 {
     public async Task<AddFileResponse> AddFileAsync(AddFileRequest request)
     {
         // load the document
-        var documentBytes = Encoding.UTF8.GetBytes(request.NzbFileContents);
+        var nzbFileContents = NormalizeNzbContents(request.NzbFileContents);
+        var documentBytes = Encoding.UTF8.GetBytes(nzbFileContents);
         using var memoryStream = new MemoryStream(documentBytes);
         var document = await NzbDocument.LoadAsync(memoryStream);
 
@@ -30,7 +35,7 @@ public class AddFileController(
             CreatedAt = DateTime.Now,
             FileName = request.FileName,
             JobName = Path.GetFileNameWithoutExtension(request.FileName),
-            NzbContents = request.NzbFileContents,
+            NzbContents = nzbFileContents,
             NzbFileSize = documentBytes.Length,
             TotalSegmentBytes = document.Files.SelectMany(x => x.Segments).Select(x => x.Size).Sum(),
             Category = request.Category,
@@ -40,6 +45,8 @@ public class AddFileController(
         };
         dbClient.Ctx.QueueItems.Add(queueItem);
         await dbClient.Ctx.SaveChangesAsync(request.CancellationToken);
+        var message = GetQueueResponse.QueueSlot.FromQueueItem(queueItem).ToJson();
+        _ = websocketManager.SendMessage(WebsocketTopic.QueueItemAdded, message);
 
         // return response
         return new AddFileResponse()
@@ -53,5 +60,12 @@ public class AddFileController(
     {
         var request = await AddFileRequest.New(httpContext);
         return Ok(await AddFileAsync(request));
+    }
+
+    private static string NormalizeNzbContents(string nzbContents)
+    {
+        return nzbContents
+            .Replace("https://www.newzbin.com/DTD/2003/nzb", "http://www.newzbin.com/DTD/2003/nzb")
+            .Replace("date=\"\"", "date=\"0\"");
     }
 }
