@@ -20,7 +20,12 @@ COPY ./backend ./
 # Accept build-time architecture as ARG (e.g., x64 or arm64)
 ARG TARGETARCH
 RUN dotnet restore
-RUN dotnet publish -c Release -r linux-musl-${TARGETARCH} -o ./publish
+RUN case "$TARGETARCH" in \
+        amd64) RID_ARCH=x64 ;; \
+        arm64) RID_ARCH=arm64 ;; \
+        *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && dotnet publish -c Release -r linux-musl-${RID_ARCH} -o ./publish
 
 # -------- Stage 3: Combined runtime image --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
