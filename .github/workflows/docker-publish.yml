@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      HAS_DOCKER_CREDENTIALS: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
 
     permissions:
       contents: read
@@ -32,11 +34,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
+        if: env.HAS_DOCKER_CREDENTIALS == 'true'
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set tags and NZBDAV_VERSION
         id: set_vars
@@ -52,7 +55,7 @@ jobs:
           fi
 
           GHCR_REPO="ghcr.io/${{ github.repository }}"
-          DOCKERHUB_REPO="nzbdav/nzbdav"
+          DOCKERHUB_REPO="fatbob01/nzbdav"
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             {
               echo "TAGS<<EOF"
@@ -61,11 +64,13 @@ jobs:
               echo "${GHCR_REPO}:${MAJOR}.x"
               echo "${GHCR_REPO}:${MAJOR}.${MINOR}.x"
               echo "${GHCR_REPO}:${MAJOR}.${MINOR}.${PATCH}"
-              echo "${DOCKERHUB_REPO}:alpha"
-              echo "${DOCKERHUB_REPO}:latest"
-              echo "${DOCKERHUB_REPO}:${MAJOR}.x"
-              echo "${DOCKERHUB_REPO}:${MAJOR}.${MINOR}.x"
-              echo "${DOCKERHUB_REPO}:${MAJOR}.${MINOR}.${PATCH}"
+              if [[ "${{ env.HAS_DOCKER_CREDENTIALS }}" == "true" ]]; then
+                echo "${DOCKERHUB_REPO}:alpha"
+                echo "${DOCKERHUB_REPO}:latest"
+                echo "${DOCKERHUB_REPO}:${MAJOR}.x"
+                echo "${DOCKERHUB_REPO}:${MAJOR}.${MINOR}.x"
+                echo "${DOCKERHUB_REPO}:${MAJOR}.${MINOR}.${PATCH}"
+              fi
               echo "EOF"
             } >> $GITHUB_OUTPUT
           else
