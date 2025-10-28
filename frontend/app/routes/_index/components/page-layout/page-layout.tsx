@@ -35,8 +35,6 @@ export function PageLayout(props: PageLayoutProps) {
     let containerClassName = styles["container"];
     if (isHamburgerMenuOpen) containerClassName += " " + styles["hamburger-open"];
 
-    const pageTransitionClass = isNavigating ? "page-transition-enter" : "page-transition-enter-active";
-
     return (
         <>
             <div className={containerClassName}>
@@ -49,8 +47,8 @@ export function PageLayout(props: PageLayoutProps) {
                     <div className={styles["left-navigation"]}>
                         {props.leftNavChild}
                     </div>
-                    <div
-                        className={`${styles["body"]} ${pageTransitionClass}`}
+                    <div 
+                        className={`${styles["body"]} ${isPageVisible ? 'page-transition-enter-active' : 'page-transition-enter'}`} 
                         onClick={onBodyClick}
                     >
                         {props.bodyChild}
