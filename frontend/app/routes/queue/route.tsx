@@ -2,168 +2,155 @@ import { redirect } from "react-router";
 import { clearQueueAction } from "./actions.server";
 import type { Route } from "./+types/route";
 import { sessionStorage } from "~/auth/authentication.server";
+import { Layout } from "../_index/components/layout/layout";
+import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
+import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
 import { Alert } from 'react-bootstrap';
-import { backendClient, type HistorySlot, type QueueSlot } from "~/clients/backend-client.server";
+import { backendClient, type HistoryResponse, type QueueResponse } from "~/clients/backend-client.server";
 import { EmptyQueue } from "./components/empty-queue/empty-queue";
 import { EmptyHistory } from "./components/empty-history/empty-history";
 import { HistoryTable } from "./components/history-table/history-table";
 import { QueueTable } from "./components/queue-table/queue-table";
-import { useCallback, useEffect, useState } from "react";
-import { receiveMessage } from "~/utils/websocket-util";
+import { useEffect } from "react";
+import { useRevalidator, useNavigation } from "react-router";
+import { SkeletonTable } from "~/components/skeleton-loader";
 
-const topicNames = {
-    queueItemStatus: 'qs',
-    queueItemPercentage: 'qp',
-    queueItemAdded: 'qa',
-    queueItemRemoved: 'qr',
-    historyItemAdded: 'ha',
-    historyItemRemoved: 'hr',
-}
-const topicSubscriptions = {
-    [topicNames.queueItemStatus]: 'state',
-    [topicNames.queueItemPercentage]: 'state',
-    [topicNames.queueItemAdded]: 'event',
-    [topicNames.queueItemRemoved]: 'event',
-    [topicNames.historyItemAdded]: 'event',
-    [topicNames.historyItemRemoved]: 'event',
-}
+type BodyProps = {
+    loaderData: { queue: QueueResponse, history: HistoryResponse },
+    actionData: { error?: string, success?: boolean } | undefined
+};
 
 export async function loader({ request }: Route.LoaderArgs) {
+    let session = await sessionStorage.getSession(request.headers.get("cookie"));
+    let user = session.get("user");
+    if (!user) return redirect("/login");
+
     var queuePromise = backendClient.getQueue();
     var historyPromise = backendClient.getHistory();
     var queue = await queuePromise;
     var history = await historyPromise;
     return {
-        queueSlots: queue?.slots || [],
-        historySlots: history?.slots || [],
+        queue: queue,
+        history: history,
     }
 }
 
 export default function Queue(props: Route.ComponentProps) {
-    const [queueSlots, setQueueSlots] = useState<PresentationQueueSlot[]>(props.loaderData.queueSlots);
-    const [historySlots, setHistorySlots] = useState<PresentationHistorySlot[]>(props.loaderData.historySlots);
-    const error = props.actionData?.error;
+    const revalidator = useRevalidator();
 
-    // queue events
-    const onAddQueueSlot = useCallback((queueSlot: QueueSlot) => {
-        setQueueSlots(slots => [...slots, queueSlot]);
-    }, [setQueueSlots]);
-
-    const onSelectQueueSlots = useCallback((ids: Set<string>, isSelected: boolean) => {
-        setQueueSlots(slots => slots.map(x => ids.has(x.nzo_id) ? { ...x, isSelected } : x));
-    }, [setQueueSlots]);
-
-    const onRemovingQueueSlots = useCallback((ids: Set<string>, isRemoving: boolean) => {
-        setQueueSlots(slots => slots.map(x => ids.has(x.nzo_id) ? { ...x, isRemoving } : x));
-    }, [setQueueSlots]);
-
-    const onRemoveQueueSlots = useCallback((ids: Set<string>) => {
-        setQueueSlots(slots => slots.filter(x => !ids.has(x.nzo_id)));
-    }, [setQueueSlots]);
-
-    const onChangeQueueSlotStatus = useCallback((message: string) => {
-        const [nzo_id, status] = message.split('|');
-        setQueueSlots(slots => slots.map(x => x.nzo_id === nzo_id ? { ...x, status } : x));
-    }, [setQueueSlots]);
-
-    const onChangeQueueSlotPercentage = useCallback((message: string) => {
-        const [nzo_id, true_percentage] = message.split('|');
-        setQueueSlots(slots => slots.map(x => x.nzo_id === nzo_id ? { ...x, true_percentage } : x));
-    }, [setQueueSlots]);
-
-    // history events
-    const onAddHistorySlot = useCallback((historySlot: HistorySlot) => {
-        setHistorySlots(slots => [historySlot, ...slots]);
-    }, [setHistorySlots]);
-
-    const onSelectHistorySlots = useCallback((ids: Set<string>, isSelected: boolean) => {
-        setHistorySlots(slots => slots.map(x => ids.has(x.nzo_id) ? { ...x, isSelected } : x));
-    }, [setHistorySlots]);
-
-    const onRemovingHistorySlots = useCallback((ids: Set<string>, isRemoving: boolean) => {
-        setHistorySlots(slots => slots.map(x => ids.has(x.nzo_id) ? { ...x, isRemoving } : x));
-    }, [setHistorySlots]);
-
-    const onRemoveHistorySlots = useCallback((ids: Set<string>) => {
-        setHistorySlots(slots => slots.filter(x => !ids.has(x.nzo_id)));
-    }, [setHistorySlots]);
-
-    // websocket
-    const onWebsocketMessage = useCallback((topic: string, message: string) => {
-        if (topic == topicNames.queueItemAdded)
-            onAddQueueSlot(JSON.parse(message));
-        else if (topic == topicNames.queueItemRemoved)
-            onRemoveQueueSlots(new Set<string>(message.split(',')));
-        else if (topic == topicNames.queueItemStatus)
-            onChangeQueueSlotStatus(message);
-        else if (topic == topicNames.queueItemPercentage)
-            onChangeQueueSlotPercentage(message);
-        else if (topic == topicNames.historyItemAdded)
-            onAddHistorySlot(JSON.parse(message));
-        else if (topic == topicNames.historyItemRemoved)
-            onRemoveHistorySlots(new Set<string>(message.split(',')));
-    }, [
-        onAddQueueSlot,
-        onRemoveQueueSlots,
-        onChangeQueueSlotStatus,
-        onChangeQueueSlotPercentage,
-        onAddHistorySlot,
-        onRemoveHistorySlots,
-    ]);
-
+    // Auto-refresh queue data only when there are active downloads
     useEffect(() => {
-        let ws: WebSocket;
-        let disposed = false;
-        function connect() {
-            ws = new WebSocket(window.location.origin.replace(/^http/, 'ws'));
-            ws.onmessage = receiveMessage(onWebsocketMessage);
-            ws.onopen = () => { ws.send(JSON.stringify(topicSubscriptions)); }
-            ws.onclose = () => { !disposed && setTimeout(() => connect(), 1000); };
-            ws.onerror = () => { ws.close() };
-            return () => { disposed = true; ws.close(); }
-        }
+        const hasActiveDownloads = props.loaderData.queue.slots.some((slot: any) => 
+            slot.status.toLowerCase() === 'downloading' || 
+            slot.status.toLowerCase() === 'queued'
+        );
 
-        return connect();
-    }, [onWebsocketMessage]);
+        if (!hasActiveDownloads) return;
+
+        const interval = setInterval(() => {
+            if (revalidator.state === "idle") {
+                revalidator.revalidate();
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [revalidator, props.loaderData.queue.slots]);
+
+    return (
+        <Layout
+            topNavComponent={TopNavigation}
+            bodyChild={<Body loaderData={props.loaderData} actionData={props.actionData} />}
+            leftNavChild={<LeftNavigation />}
+        />
+    );
+}
+
+function Body({ loaderData, actionData }: BodyProps) {
+    const { queue, history } = loaderData;
+    const revalidator = useRevalidator();
+    const navigation = useNavigation();
+    const isLoading = revalidator.state === "loading" || navigation.state === "loading";
+
+    // Revalidate immediately after successful upload
+    useEffect(() => {
+        if (actionData?.success) {
+            revalidator.revalidate();
+        }
+    }, [actionData?.success, revalidator]);
 
     return (
         <div className={styles.container}>
-            {/* error message */}
-            {error &&
-                <Alert variant="danger">
-                    {error}
-                </Alert>
-            }
-
             {/* queue */}
             <div className={styles.section}>
-                {queueSlots.length > 0 ?
-                    <QueueTable queueSlots={queueSlots}
-                        onIsSelectedChanged={onSelectQueueSlots}
-                        onIsRemovingChanged={onRemovingQueueSlots}
-                        onRemoved={onRemoveQueueSlots}
-                    /> :
-                    <EmptyQueue />}
+                <h3 className={styles["section-title"]}>
+                    Queue
+                </h3>
+                <div className={styles["section-body"]}>
+                    {/* messages */}
+                    {actionData?.error &&
+                        <Alert variant="danger">
+                            {actionData.error}
+                        </Alert>
+                    }
+                    {actionData?.success &&
+                        <Alert variant="success">
+                            NZB file added successfully!
+                        </Alert>
+                    }
+                    {isLoading ? (
+                        <SkeletonTable />
+                    ) : (
+                        queue.slots.length > 0 ? <QueueTable queue={queue} /> : <EmptyQueue />
+                    )}
+                </div>
             </div>
 
             {/* history */}
-            {historySlots.length > 0 &&
-                <div className={styles.section}>
-                    <HistoryTable
-                        historySlots={historySlots}
-                        onIsSelectedChanged={onSelectHistorySlots}
-                        onIsRemovingChanged={onRemovingHistorySlots}
-                        onRemoved={onRemoveHistorySlots}
-                    />
+            <div className={styles.section}>
+                <h3 className={styles["section-title"]}>
+                    History
+                </h3>
+                <div className={styles["section-body"]}>
+                    {isLoading ? (
+                        <SkeletonTable />
+                    ) : (
+                        history.slots.length > 0 ? <HistoryTable history={history} /> : <EmptyHistory />
+                    )}
                 </div>
-            }
+            </div>
         </div>
     );
 }
 
 export async function action({ request }: Route.ActionArgs) {
-    // ensure user is logged in
+    const formData = await request.clone().formData();
+    const intent = formData.get("intent");
+
+    if (intent === "clear-queue") {
+        return clearQueueAction({ request, params: {}, context: { VALUE_FROM_EXPRESS: '' } });
+    }
+
+    if (intent === "remove-history") {
+        let session = await sessionStorage.getSession(request.headers.get("cookie"));
+        let user = session.get("user");
+        if (!user) return redirect("/login");
+
+        try {
+            const nzoId = formData.get("nzoId");
+            if (typeof nzoId !== "string") {
+                return { error: "Error removing history." };
+            }
+            await backendClient.removeHistory(nzoId);
+            return { success: true };
+        } catch (error) {
+            if (error instanceof Error) {
+                return { error: error.message };
+            }
+            throw error;
+        }
+    }
+
     let session = await sessionStorage.getSession(request.headers.get("cookie"));
     let user = session.get("user");
     if (!user) return redirect("/login");
@@ -185,12 +172,3 @@ export async function action({ request }: Route.ActionArgs) {
     }
 }
 
-export type PresentationHistorySlot = HistorySlot & {
-    isSelected?: boolean,
-    isRemoving?: boolean,
-}
-
-export type PresentationQueueSlot = QueueSlot & {
-    isSelected?: boolean,
-    isRemoving?: boolean,
-}

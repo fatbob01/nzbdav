@@ -8,12 +8,6 @@
     margin-bottom: 32px;
 }
 
-.home {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
 .home-icon {
     flex-shrink: 0;
     display: inline-block;

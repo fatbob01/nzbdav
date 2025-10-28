@@ -9,24 +9,23 @@ namespace NzbWebDAV.Database;
 public sealed class DavDatabaseContext() : DbContext(Options.Value)
 {
     public static string ConfigPath => Environment.GetEnvironmentVariable("CONFIG_PATH") ?? "/config";
-    public static string DatabaseFilePath => Path.Join(ConfigPath, "db.sqlite");
 
-    private static readonly Lazy<DbContextOptions<DavDatabaseContext>> Options = new(
-        () => new DbContextOptionsBuilder<DavDatabaseContext>()
-            .UseSqlite($"Data Source={DatabaseFilePath}")
+    private static readonly Lazy<DbContextOptions<DavDatabaseContext>> Options = new(() =>
+    {
+        var databaseFilePath = Path.Join(ConfigPath, "db.sqlite");
+        return new DbContextOptionsBuilder<DavDatabaseContext>()
+            .UseSqlite($"Data Source={databaseFilePath}")
             .AddInterceptors(new SqliteForeignKeyEnabler())
-            .Options
-    );
+            .Options;
+    });
 
     // database sets
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<DavItem> Items => Set<DavItem>();
     public DbSet<DavNzbFile> NzbFiles => Set<DavNzbFile>();
     public DbSet<DavRarFile> RarFiles => Set<DavRarFile>();
-    public DbSet<DavMultipartFile> MultipartFiles => Set<DavMultipartFile>();
     public DbSet<QueueItem> QueueItems => Set<QueueItem>();
     public DbSet<HistoryItem> HistoryItems => Set<HistoryItem>();
-    public DbSet<HealthCheckResult> HealthCheckResults => Set<HealthCheckResult>();
     public DbSet<ConfigItem> ConfigItems => Set<ConfigItem>();
 
     // tables
@@ -74,33 +73,6 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
                 .HasConversion<int>()
                 .IsRequired();
 
-            e.Property(i => i.Path)
-                .IsRequired();
-
-            e.Property(i => i.IdPrefix)
-                .IsRequired();
-
-            e.Property(i => i.ReleaseDate)
-                .ValueGeneratedNever()
-                .HasConversion(
-                    x => x.HasValue ? x.Value.ToUnixTimeSeconds() : (long?)null,
-                    x => x.HasValue ? DateTimeOffset.FromUnixTimeSeconds(x.Value) : null
-                );
-
-            e.Property(i => i.LastHealthCheck)
-                .ValueGeneratedNever()
-                .HasConversion(
-                    x => x.HasValue ? x.Value.ToUnixTimeSeconds() : (long?)null,
-                    x => x.HasValue ? DateTimeOffset.FromUnixTimeSeconds(x.Value) : null
-                );
-
-            e.Property(i => i.NextHealthCheck)
-                .ValueGeneratedNever()
-                .HasConversion(
-                    x => x.HasValue ? x.Value.ToUnixTimeSeconds() : (long?)null,
-                    x => x.HasValue ? DateTimeOffset.FromUnixTimeSeconds(x.Value) : null
-                );
-
             e.HasOne(i => i.Parent)
                 .WithMany(p => p.Children)
                 .HasForeignKey(i => i.ParentId)
@@ -108,10 +80,6 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
 
             e.HasIndex(i => new { i.ParentId, i.Name })
                 .IsUnique();
-
-            e.HasIndex(i => new { i.IdPrefix, i.Type });
-
-            e.HasIndex(i => new { i.Type, i.NextHealthCheck, i.ReleaseDate, i.Id });
         });
 
         // DavNzbFile
@@ -163,31 +131,6 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // DavMultipartFile
-        b.Entity<DavMultipartFile>(e =>
-        {
-            e.ToTable("DavMultipartFiles");
-            e.HasKey(f => f.Id);
-
-            e.Property(i => i.Id)
-                .ValueGeneratedNever();
-
-            e.Property(f => f.Metadata)
-                .HasConversion(new ValueConverter<DavMultipartFile.Meta, string>
-                (
-                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-                    v => JsonSerializer.Deserialize<DavMultipartFile.Meta>(v, (JsonSerializerOptions?)null) ??
-                         new DavMultipartFile.Meta()
-                ))
-                .HasColumnType("TEXT") // store raw JSON
-                .IsRequired();
-
-            e.HasOne(f => f.DavItem)
-                .WithOne()
-                .HasForeignKey<DavMultipartFile>(f => f.Id)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         // QueueItem
         b.Entity<QueueItem>(e =>
         {
@@ -227,11 +170,11 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
             e.Property(i => i.PauseUntil)
                 .ValueGeneratedNever();
 
-            e.Property(i => i.JobName)
-                .IsRequired();
-
             e.HasIndex(i => new { i.FileName })
                 .IsUnique();
+
+            e.Property(i => i.JobName)
+                .IsRequired();
 
             e.HasIndex(i => new { i.Priority })
                 .IsUnique(false);
@@ -284,9 +227,6 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
             e.Property(i => i.FailMessage)
                 .IsRequired(false);
 
-            e.Property(i => i.DownloadDirId)
-                .IsRequired(false);
-
             e.HasIndex(i => new { i.CreatedAt })
                 .IsUnique(false);
 
@@ -294,53 +234,6 @@ public sealed class DavDatabaseContext() : DbContext(Options.Value)
                 .IsUnique(false);
 
             e.HasIndex(i => new { i.Category, i.CreatedAt })
-                .IsUnique(false);
-
-            e.HasIndex(i => new { i.Category, i.DownloadDirId })
-                .IsUnique(false);
-        });
-
-        // HealthCheckResult
-        b.Entity<HealthCheckResult>(e =>
-        {
-            e.ToTable("HealthCheckResults");
-            e.HasKey(i => i.Id);
-
-            e.Property(i => i.Id)
-                .ValueGeneratedNever()
-                .IsRequired();
-
-            e.Property(i => i.CreatedAt)
-                .ValueGeneratedNever()
-                .IsRequired()
-                .HasConversion(
-                    x => x.ToUnixTimeSeconds(),
-                    x => DateTimeOffset.FromUnixTimeSeconds(x)
-                );
-
-            e.Property(i => i.DavItemId)
-                .ValueGeneratedNever()
-                .IsRequired();
-
-            e.Property(i => i.Path)
-                .IsRequired();
-
-            e.Property(i => i.Result)
-                .HasConversion<int>()
-                .IsRequired();
-
-            e.Property(i => i.RepairStatus)
-                .HasConversion<int>()
-                .IsRequired();
-
-            e.Property(i => i.Message)
-                .IsRequired(false);
-
-            e.HasIndex(i => new { i.Result, i.RepairStatus, i.CreatedAt })
-                .IsUnique(false);
-
-            e.HasIndex(h => h.DavItemId)
-                .HasFilter("\"RepairStatus\" = 3")
                 .IsUnique(false);
         });
 

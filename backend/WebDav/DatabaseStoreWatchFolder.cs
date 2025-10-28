@@ -1,36 +1,24 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using NWebDav.Server;
 using NWebDav.Server.Stores;
 using NzbWebDAV.Api.SabControllers.AddFile;
 using NzbWebDAV.Api.SabControllers.RemoveFromQueue;
-using NzbWebDAV.Clients.Usenet;
+using NzbWebDAV.Clients;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
-using NzbWebDAV.Queue;
+using NzbWebDAV.Services;
 using NzbWebDAV.WebDav.Requests;
-using NzbWebDAV.Websocket;
 
 namespace NzbWebDAV.WebDav;
 
 public class DatabaseStoreWatchFolder(
     DavItem davDirectory,
-    HttpContext httpContext,
     DavDatabaseClient dbClient,
     ConfigManager configManager,
-    UsenetStreamingClient usenetClient,
-    QueueManager queueManager,
-    WebsocketManager websocketManager
-) : DatabaseStoreCollection(
-    davDirectory,
-    httpContext,
-    dbClient,
-    configManager,
-    usenetClient,
-    queueManager,
-    websocketManager
-)
+    UsenetProviderManager usenetClient,
+    QueueManager queueManager
+) : DatabaseStoreCollection(davDirectory, dbClient, configManager, usenetClient, queueManager)
 {
     protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
     {
@@ -51,7 +39,7 @@ public class DatabaseStoreWatchFolder(
 
     protected override async Task<StoreItemResult> CreateItemAsync(CreateItemRequest request)
     {
-        var controller = new AddFileController(null!, dbClient, queueManager, configManager, websocketManager);
+        var controller = new AddFileController(null!, dbClient, queueManager, configManager);
         using var streamReader = new StreamReader(request.Stream);
         var nzbFileContents = await streamReader.ReadToEndAsync(request.CancellationToken);
         var addFileRequest = new AddFileRequest()
@@ -75,7 +63,10 @@ public class DatabaseStoreWatchFolder(
 
     protected override async Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
     {
-        var controller = new RemoveFromQueueController(null!, dbClient, queueManager, configManager, websocketManager);
+        if (configManager.IsEnforceReadonlyWebdavEnabled())
+            return DavStatusCode.Forbidden;
+
+        var controller = new RemoveFromQueueController(null!, dbClient, queueManager, configManager);
 
         // get the item to delete
         var item = await dbClient.Ctx.QueueItems
@@ -90,7 +81,7 @@ public class DatabaseStoreWatchFolder(
         dbClient.Ctx.ChangeTracker.Clear();
         await controller.RemoveFromQueue(new RemoveFromQueueRequest()
         {
-            NzoIds = [item.Id],
+            NzoId = item.Id.ToString(),
             CancellationToken = request.CancellationToken
         });
         return DavStatusCode.NoContent;

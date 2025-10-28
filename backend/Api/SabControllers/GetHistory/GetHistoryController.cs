@@ -1,8 +1,10 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
+using NzbWebDAV.Database.Models;
+using NzbWebDAV.Utils;
 
 namespace NzbWebDAV.Api.SabControllers.GetHistory;
 
@@ -14,11 +16,6 @@ public class GetHistoryController(
 {
     private async Task<GetHistoryResponse> GetHistoryAsync(GetHistoryRequest request)
     {
-        // get total count
-        var totalCount = await dbClient.Ctx.HistoryItems
-            .Where(q => q.Category == request.Category || request.Category == null)
-            .CountAsync(request.CancellationToken);
-
         // get history items
         var historyItems = await dbClient.Ctx.HistoryItems
             .Where(q => q.Category == request.Category || request.Category == null)
@@ -29,7 +26,24 @@ public class GetHistoryController(
 
         // get slots
         var slots = historyItems
-            .Select(x => GetHistoryResponse.HistorySlot.FromHistoryItem(x, configManager.GetRcloneMountDir()))
+            .Select(historyItem => new GetHistoryResponse.HistorySlot()
+            {
+                NzoId = historyItem.Id.ToString(),
+                NzbName = historyItem.FileName,
+                JobName = historyItem.JobName,
+                Category = historyItem.Category,
+                Status = historyItem.DownloadStatus,
+                SizeInBytes = historyItem.TotalSegmentBytes,
+                DownloadPath = Path.Join(new[]
+                {
+                    configManager.GetRcloneMountDir(),
+                    DavItem.SymlinkFolder.Name,
+                    historyItem.Category,
+                    historyItem.JobName
+                }),
+                DownloadTimeSeconds = historyItem.DownloadTimeSeconds,
+                FailMessage = historyItem.FailMessage ?? "",
+            })
             .ToList();
 
         // return response
@@ -38,14 +52,13 @@ public class GetHistoryController(
             History = new GetHistoryResponse.HistoryObject()
             {
                 Slots = slots,
-                TotalCount = totalCount,
             }
         };
     }
 
     protected override async Task<IActionResult> Handle()
     {
-        var request = new GetHistoryRequest(httpContext, configManager);
+        var request = new GetHistoryRequest(httpContext);
         return Ok(await GetHistoryAsync(request));
     }
 }

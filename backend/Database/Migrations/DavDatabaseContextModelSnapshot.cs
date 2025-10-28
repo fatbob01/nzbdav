@@ -64,58 +64,23 @@ namespace NzbWebDAV.Database.Migrations
                     b.Property<long?>("FileSize")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("IdPrefix")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("LastHealthCheck")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("NextHealthCheck")
-                        .HasColumnType("INTEGER");
-
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("TEXT");
-
-                    b.Property<string>("Path")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("ReleaseDate")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Type")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IdPrefix", "Type");
-
                     b.HasIndex("ParentId", "Name")
                         .IsUnique();
 
-                    b.HasIndex("Type", "NextHealthCheck", "ReleaseDate", "Id");
-
                     b.ToTable("DavItems", (string)null);
-                });
-
-            modelBuilder.Entity("NzbWebDAV.Database.Models.DavMultipartFile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Metadata")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DavMultipartFiles", (string)null);
                 });
 
             modelBuilder.Entity("NzbWebDAV.Database.Models.DavNzbFile", b =>
@@ -146,40 +111,6 @@ namespace NzbWebDAV.Database.Migrations
                     b.ToTable("DavRarFiles", (string)null);
                 });
 
-            modelBuilder.Entity("NzbWebDAV.Database.Models.HealthCheckResult", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid>("DavItemId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Message")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Path")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("RepairStatus")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Result")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DavItemId")
-                        .HasFilter("\"RepairStatus\" = 3");
-
-                    b.HasIndex("Result", "RepairStatus", "CreatedAt");
-
-                    b.ToTable("HealthCheckResults", (string)null);
-                });
-
             modelBuilder.Entity("NzbWebDAV.Database.Models.HistoryItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -190,9 +121,6 @@ namespace NzbWebDAV.Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("DownloadDirId")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("DownloadStatus")
@@ -222,8 +150,6 @@ namespace NzbWebDAV.Database.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("Category", "CreatedAt");
-
-                    b.HasIndex("Category", "DownloadDirId");
 
                     b.ToTable("HistoryItems", (string)null);
                 });
@@ -296,17 +222,6 @@ namespace NzbWebDAV.Database.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Parent");
-                });
-
-            modelBuilder.Entity("NzbWebDAV.Database.Models.DavMultipartFile", b =>
-                {
-                    b.HasOne("NzbWebDAV.Database.Models.DavItem", "DavItem")
-                        .WithOne()
-                        .HasForeignKey("NzbWebDAV.Database.Models.DavMultipartFile", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DavItem");
                 });
 
             modelBuilder.Entity("NzbWebDAV.Database.Models.DavNzbFile", b =>

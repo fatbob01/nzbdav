@@ -1,40 +1,54 @@
-﻿using System.Text;
-using NzbWebDAV.Config;
+using System.Linq;
+using System.Text;
+using NWebDav.Server;
+using NWebDav.Server.Stores;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Utils;
 using NzbWebDAV.WebDav.Base;
+using NzbWebDAV.WebDav.Requests;
+using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
-public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManager) : BaseStoreReadonlyItem
+public class DatabaseStoreSymlinkFile(DavItem davFile, string parentPath) : BaseStoreItem
 {
     public override string Name => davFile.Name + ".rclonelink";
     public override string UniqueKey => davFile.Id + ".rclonelink";
     public override long FileSize => ContentBytes.Length;
-    public override DateTime CreatedAt => davFile.CreatedAt;
 
-    private byte[] ContentBytes => Encoding.UTF8.GetBytes(GetTargetPath());
+    private string TargetPath
+    {
+        get
+        {
+            var ups = Enumerable.Repeat(
+                "..",
+                parentPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length + 1
+            );
+
+            return Path.Combine(
+                    ups.Concat(new[] { DavItem.ContentFolder.Name, parentPath, davFile.Name }).ToArray()
+                )
+                .Replace('\\', '/');
+        }
+    }
+
+    private byte[] ContentBytes =>
+        Encoding.UTF8.GetBytes(TargetPath);
 
     public override Task<Stream> GetReadableStreamAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetTargetPath()
+    protected override Task<DavStatusCode> UploadFromStreamAsync(UploadFromStreamRequest request)
     {
-        return GetTargetPath(davFile, configManager.GetRcloneMountDir());
+        Log.Error("symlinks files cannot be modified. They simply mirror items in the /content root");
+        return Task.FromResult(DavStatusCode.Forbidden);
     }
 
-    public static string GetTargetPath(DavItem davFile, string mountDir)
+    protected override Task<StoreItemResult> CopyAsync(CopyRequest request)
     {
-        var pathParts = davFile.IdPrefix
-            .Select(x => x.ToString())
-            .Prepend(DavItem.IdsFolder.Name)
-            .Prepend(mountDir)
-            .Append(davFile.Id.ToString())
-            .ToArray();
-
-        return Path
-            .Join(pathParts)
-            .Replace('\\', '/');
+        Log.Error("symlinks files cannot be copied. They simply mirror items in the /content root");
+        return Task.FromResult(new StoreItemResult(DavStatusCode.Forbidden));
     }
 }

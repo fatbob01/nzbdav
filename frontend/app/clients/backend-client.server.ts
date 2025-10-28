@@ -67,13 +67,13 @@ class BackendClient {
         return data.authenticated;
     }
 
-    public async getQueue(): Promise<QueueResponse> {
+    public async getQueue(): Promise<any> {
         const url = process.env.BACKEND_URL + "/api?mode=queue";
 
         const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
         const response = await fetch(url, { headers: { "x-api-key": apiKey } });
         if (!response.ok) {
-            throw new Error(`Failed to get queue: ${(await response.json()).error}`);
+            throw new Error(`Failed to authenticate: ${(await response.json()).error}`);
         }
 
         const data = await response.json();
@@ -86,7 +86,7 @@ class BackendClient {
         const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
         const response = await fetch(url, { headers: { "x-api-key": apiKey } });
         if (!response.ok) {
-            throw new Error(`Failed to get history: ${(await response.json()).error}`);
+            throw new Error(`Failed to authenticate: ${(await response.json()).error}`);
         }
 
         const data = await response.json();
@@ -212,44 +212,29 @@ class BackendClient {
         return data.status;
     }
 
-    public async getHealthCheckQueue(pageSize?: number): Promise<HealthCheckQueueResponse> {
-        let url = process.env.BACKEND_URL + "/api/get-health-check-queue";
-
-        if (pageSize !== undefined) {
-            url += `?pageSize=${pageSize}`;
-        }
+    public async testUsenetConnection(request: TestUsenetConnectionRequest): Promise<boolean> {
+        const url = process.env.BACKEND_URL + "/api/test-usenet-connection";
 
         const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
         const response = await fetch(url, {
-            method: "GET",
-            headers: { "x-api-key": apiKey }
+            method: "POST",
+            headers: { "x-api-key": apiKey },
+            body: (() => {
+                const form = new FormData();
+                form.append("host", request.host);
+                form.append("port", request.port);
+                form.append("use-ssl", request.useSsl);
+                form.append("user", request.user);
+                form.append("pass", request.pass);
+                return form;
+            })()
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to get health check queue: ${(await response.json()).error}`);
+            throw new Error(`Failed to test-usenet-connection: ${(await response.json()).error}`);
         }
         const data = await response.json();
-        return data;
-    }
-
-    public async getHealthCheckHistory(pageSize?: number): Promise<HealthCheckHistoryResponse> {
-        let url = process.env.BACKEND_URL + "/api/get-health-check-history";
-
-        if (pageSize !== undefined) {
-            url += `?pageSize=${pageSize}`;
-        }
-
-        const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
-        const response = await fetch(url, {
-            method: "GET",
-            headers: { "x-api-key": apiKey }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to get health check history: ${(await response.json()).error}`);
-        }
-        const data = await response.json();
-        return data;
+        return data.connected || false;
     }
 
     public async getConnectionStats(): Promise<ConnectionStatsResponse> {
@@ -275,7 +260,7 @@ class BackendClient {
 export const backendClient = new BackendClient();
 
 export type QueueResponse = {
-    slots: QueueSlot[]
+    slots: [QueueSlot]
 }
 
 export type QueueSlot = {
@@ -284,14 +269,13 @@ export type QueueSlot = {
     filename: string,
     cat: string,
     percentage: string,
-    true_percentage: string,
     status: string,
     mb: string,
     mbleft: string,
 }
 
 export type HistoryResponse = {
-    slots: HistorySlot[]
+    slots: [HistorySlot]
 }
 
 export type HistorySlot = {
@@ -325,50 +309,20 @@ export type TestUsenetConnectionRequest = {
     pass: string
 }
 
-export type HealthCheckQueueResponse = {
-    uncheckedCount: number,
-    items: HealthCheckQueueItem[]
+export type ConnectionStatsResponse = {
+    status: boolean,
+    providerStats: ProviderStat[],
+    totalActiveConnections: number,
+    totalMaxConnections: number
 }
 
-export type HealthCheckQueueItem = {
+export type ProviderStat = {
     id: string,
     name: string,
-    path: string,
-    releaseDate: string | null,
-    lastHealthCheck: string | null,
-    nextHealthCheck: string | null,
-    progress: number,
-}
-
-export type HealthCheckHistoryResponse = {
-    stats: HealthCheckStats[],
-    items: HealthCheckResult[]
-}
-
-export type HealthCheckStats = {
-    result: HealthResult,
-    repairStatus: RepairAction,
-    count: number
-}
-
-export type HealthCheckResult = {
-    id: string,
-    createdAt: string,
-    davItemId: string,
-    path: string,
-    result: HealthResult,
-    repairStatus: RepairAction,
-    message: string | null
-}
-
-export enum HealthResult {
-    Healthy = 0,
-    Unhealthy = 1,
-}
-
-export enum RepairAction {
-    None = 0,
-    Repaired = 1,
-    Deleted = 2,
-    ActionNeeded = 3,
+    host: string,
+    port: number,
+    isHealthy: boolean,
+    priority: number,
+    activeConnections: number,
+    maxConnections: number
 }

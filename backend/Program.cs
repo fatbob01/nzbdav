@@ -1,25 +1,22 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NWebDav.Server;
 using NWebDav.Server.Authentication;
 using NWebDav.Server.Stores;
 using NzbWebDAV.Api.SabControllers;
-using NzbWebDAV.Clients.Usenet;
+using NzbWebDAV.Clients;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Middlewares;
-using NzbWebDAV.Queue;
 using NzbWebDAV.Services;
 using Microsoft.Extensions.Logging;
 using NzbWebDAV.Utils;
 using NzbWebDAV.WebDav;
 using NzbWebDAV.WebDav.Base;
-using NzbWebDAV.Websocket;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -31,7 +28,7 @@ class Program
     static async Task Main(string[] args)
     {
         // Initialize logger
-        var defaultLevel = LogEventLevel.Warning;
+        var defaultLevel = LogEventLevel.Information;
         var envLevel = Environment.GetEnvironmentVariable("LOG_LEVEL");
         var level = Enum.TryParse<LogEventLevel>(envLevel, true, out var parsed) ? parsed : defaultLevel;
         Log.Logger = new LoggerConfiguration()
@@ -45,38 +42,21 @@ class Program
             .CreateLogger();
 
         // initialize database
-        await using var databaseContext = new DavDatabaseContext();
-
-        // run database migration, if necessary.
-        if (args.Contains("--db-migration"))
-        {
-            var argIndex = args.ToList().IndexOf("--db-migration");
-            var targetMigration = args.Length > argIndex + 1 ? args[argIndex + 1] : null;
-            await databaseContext.Database.MigrateAsync(targetMigration, SigtermUtil.GetCancellationToken());
-            return;
-        }
+        var databaseContext = new DavDatabaseContext();
+        await databaseContext.Database.MigrateAsync();
 
         // initialize the config-manager
         var configManager = new ConfigManager();
         await configManager.LoadConfig();
 
-        // initialize websocket-manager
-        var websocketManager = new WebsocketManager();
-
         // initialize webapp
         var builder = WebApplication.CreateBuilder(args);
-        var maxRequestBodySize = EnvironmentUtil.GetLongVariable("MAX_REQUEST_BODY_SIZE") ?? 100 * 1024 * 1024;
-        builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = maxRequestBodySize);
         builder.Host.UseSerilog();
         builder.Services.AddControllers();
-        builder.Services.AddHealthChecks();
         builder.Services
             .AddSingleton(configManager)
-            .AddSingleton(websocketManager)
-            .AddSingleton<UsenetStreamingClient>()
+            .AddSingleton<UsenetProviderManager>()
             .AddSingleton<QueueManager>()
-            .AddSingleton<ArrMonitoringService>()
-            .AddSingleton<HealthCheckService>()
             .AddScoped<DavDatabaseContext>()
             .AddScoped<DavDatabaseClient>()
             .AddScoped<DatabaseStore>()
@@ -105,21 +85,34 @@ class Program
                 opts.Events.OnValidateCredentials = (context) => ValidateCredentials(context, configManager);
             });
 
-        // force instantiation of services
-        var app = builder.Build();
-        app.Services.GetRequiredService<ArrMonitoringService>();
-        app.Services.GetRequiredService<HealthCheckService>();
-
         // run
-        app.UseSerilogRequestLogging();
-        app.UseMiddleware<ExceptionMiddleware>();
-        app.UseWebSockets();
-        app.MapHealthChecks("/health");
-        app.Map("/ws", websocketManager.HandleRoute);
-        app.MapControllers();
+        var app = builder.Build();
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+            options.GetLevel = (httpContext, elapsed, ex) =>
+            {
+                if (ex != null) return LogEventLevel.Error;
+                if (httpContext.Response.StatusCode > 499) return LogEventLevel.Error;
+                if (httpContext.Response.StatusCode > 399) return LogEventLevel.Warning;
+                
+                // Reduce verbosity for routine WebDAV operations
+                var path = httpContext.Request.Path.Value?.ToLower() ?? "";
+                var method = httpContext.Request.Method;
+                
+                if (method == "PROPFIND" || 
+                    (method == "GET" && (path.Contains("/api") || path.Contains(".rclonelink"))))
+                {
+                    return LogEventLevel.Debug;
+                }
+                
+                return LogEventLevel.Information;
+            };
+        });
+        app.UseMiddleware<RequestCancelledMiddleware>();
         app.UseAuthentication();
+        app.MapControllers();
         app.UseNWebDav();
-        app.Lifetime.ApplicationStopping.Register(SigtermUtil.Cancel);
         await app.RunAsync();
     }
 
