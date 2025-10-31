@@ -17,6 +17,8 @@ const defaultConfig = {
     "api.ensure-importable-video": "true",
     "api.ensure-article-existence": "false",
     "api.ignore-history-limit": "true",
+    "api.download-extension-blacklist": ".nfo, .par2, .sfv",
+    "api.duplicate-nzb-behavior": "increment",
     "usenet.host": "",
     "usenet.port": "",
     "usenet.use-ssl": "false",
