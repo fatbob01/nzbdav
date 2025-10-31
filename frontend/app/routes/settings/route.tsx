@@ -1,52 +1,42 @@
 import type { Route } from "./+types/route";
-import { Layout } from "../_index/components/layout/layout";
-import { TopNavigation } from "../_index/components/top-navigation/top-navigation";
-import { LeftNavigation } from "../_index/components/left-navigation/left-navigation";
 import styles from "./route.module.css"
-import { Tabs, Tab, Button } from "react-bootstrap"
+import { Tabs, Tab, Button, Form } from "react-bootstrap"
 import { backendClient } from "~/clients/backend-client.server";
-import { redirect } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
-import { UsenetProviders } from "./usenet-providers/usenet-providers";
-
-// Helper function to check if provider settings have been updated
-function isProvidersSettingsUpdated(config: Record<string, string>, newConfig: Record<string, string>): boolean {
-    // Check if provider count changed
-    if (config["usenet.providers.count"] !== newConfig["usenet.providers.count"]) return true;
-    if (config["usenet.providers.primary"] !== newConfig["usenet.providers.primary"]) return true;
-    // Check global connections-per-stream
-    if (config["usenet.connections-per-stream"] !== newConfig["usenet.connections-per-stream"]) return true;
-
-    // Check all provider-specific keys
-    const allKeys = Object.keys(newConfig);
-    const providerKeys = allKeys.filter(key => key.startsWith("usenet.provider."));
-    
-    return providerKeys.some(key => config[key] !== newConfig[key]);
-}
-import React from "react";
+import { isUsenetSettingsUpdated, UsenetSettings } from "./usenet/usenet";
+import React, { useEffect } from "react";
 import { isSabnzbdSettingsUpdated, isSabnzbdSettingsValid, SabnzbdSettings } from "./sabnzbd/sabnzbd";
 import { isWebdavSettingsUpdated, isWebdavSettingsValid, WebdavSettings } from "./webdav/webdav";
+import { isArrsSettingsUpdated, isArrsSettingsValid, ArrsSettings } from "./arrs/arrs";
+import { Maintenance } from "./maintenance/maintenance";
+import { isRepairsSettingsUpdated, isRepairsSettingsValid, RepairsSettings } from "./repairs/repairs";
 
 const defaultConfig = {
     "api.key": "",
     "api.categories": "",
+    "api.max-queue-connections": "",
     "api.ensure-importable-video": "true",
-    // Multi-provider configuration
-    "usenet.providers.count": "0",
-    "usenet.providers.primary": "0",
+    "api.ensure-article-existence": "false",
+    "api.ignore-history-limit": "true",
+    "usenet.host": "",
+    "usenet.port": "",
+    "usenet.use-ssl": "false",
+    "usenet.connections": "",
     "usenet.connections-per-stream": "",
+    "usenet.user": "",
+    "usenet.pass": "",
     "webdav.user": "",
     "webdav.pass": "",
+    "webdav.show-hidden-files": "false",
     "webdav.enforce-readonly": "true",
+    "webdav.preview-par2-files": "false",
     "rclone.mount-dir": "",
+    "media.library-dir": "",
+    "arr.instances": "{\"RadarrInstances\":[],\"SonarrInstances\":[],\"QueueRules\":[]}",
+    "repair.connections": "",
+    "repair.enable": "false",
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-    // ensure user is logged in
-    let session = await sessionStorage.getSession(request.headers.get("cookie"));
-    let user = session.get("user");
-    if (!user) return redirect("/login");
-
     // fetch the config items
     var configItems = await backendClient.getConfig(Object.keys(defaultConfig));
 
@@ -55,35 +45,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     for (const item of configItems) {
         config[item.configName] = item.configValue;
     }
-
-    // Load provider-specific configurations dynamically
-    const providerCount = parseInt(config["usenet.providers.count"] || "0");
-    const providerKeys: string[] = [];
-    
-    for (let i = 0; i < providerCount; i++) {
-        const properties = ["name", "host", "port", "use-ssl", "connections", "user", "pass", "priority", "enabled"];
-        properties.forEach(prop => {
-            providerKeys.push(`usenet.provider.${i}.${prop}`);
-        });
-    }
-
-    if (providerKeys.length > 0) {
-        const providerConfigItems = await backendClient.getConfig(providerKeys);
-        for (const item of providerConfigItems) {
-            config[item.configName] = item.configValue;
-        }
-    }
-
     return { config: config }
 }
 
 export default function Settings(props: Route.ComponentProps) {
     return (
-        <Layout
-            topNavComponent={TopNavigation}
-            bodyChild={<Body config={props.loaderData.config} />}
-            leftNavChild={<LeftNavigation />}
-        />
+        <Body config={props.loaderData.config} />
     );
 }
 
@@ -92,27 +59,36 @@ type BodyProps = {
 };
 
 function Body(props: BodyProps) {
+    // stateful variables
     const [config, setConfig] = React.useState(props.config);
     const [newConfig, setNewConfig] = React.useState(config);
-    const [isProvidersReadyToSave, setIsProvidersReadyToSave] = React.useState(false);
+    const [isUsenetSettingsReadyToSave, setIsUsenetSettingsReadyToSave] = React.useState(false);
     const [isSaving, setIsSaving] = React.useState(false);
     const [isSaved, setIsSaved] = React.useState(false);
+    const [activeTab, setActiveTab] = React.useState('usenet');
 
-    const isProvidersUpdated = isProvidersSettingsUpdated(config, newConfig);
+    // derived variables
+    const iseUsenetUpdated = isUsenetSettingsUpdated(config, newConfig);
     const isSabnzbdUpdated = isSabnzbdSettingsUpdated(config, newConfig);
     const isWebdavUpdated = isWebdavSettingsUpdated(config, newConfig);
-    const isUpdated = isProvidersUpdated || isSabnzbdUpdated || isWebdavUpdated;
+    const isArrsUpdated = isArrsSettingsUpdated(config, newConfig);
+    const isRepairsUpdated = isRepairsSettingsUpdated(config, newConfig);
+    const isUpdated = iseUsenetUpdated || isSabnzbdUpdated || isWebdavUpdated || isArrsUpdated || isRepairsUpdated;
 
-    const providersTitle = isProvidersUpdated ? "Usenet Providers ✏️" : "Usenet Providers";
-    const sabnzbdTitle = isSabnzbdUpdated ? "SABnzbd ✏️" : "SABnzbd";
-    const webdavTitle = isWebdavUpdated ? "WebDAV ✏️" : "WebDAV";
+    const usenetTitle = iseUsenetUpdated ? "✏️ Usenet" : "Usenet";
+    const sabnzbdTitle = isSabnzbdUpdated ? "✏️ SABnzbd " : "SABnzbd";
+    const webdavTitle = isWebdavUpdated ? "✏️ WebDAV" : "WebDAV";
+    const arrsTitle = isArrsUpdated ? "✏️ Radarr/Sonarr" : "Radarr/Sonarr";
+    const repairsTitle = isRepairsUpdated ? "✏️ Repairs" : "Repairs";
 
     const saveButtonLabel = isSaving ? "Saving..."
         : !isUpdated && isSaved ? "Saved ✅"
         : !isUpdated && !isSaved ? "There are no changes to save"
-        : isProvidersUpdated && !isProvidersReadyToSave ? "Must configure at least one enabled provider"
+        : iseUsenetUpdated && !isUsenetSettingsReadyToSave ? "Must test the usenet connection to save"
         : isSabnzbdUpdated && !isSabnzbdSettingsValid(newConfig) ? "Invalid SABnzbd settings"
         : isWebdavUpdated && !isWebdavSettingsValid(newConfig) ? "Invalid WebDAV settings"
+        : isArrsUpdated && !isArrsSettingsValid(newConfig) ? "Invalid Arrs settings"
+        : isRepairsUpdated && !isRepairsSettingsValid(newConfig) ? "Invalid Repairs settings"
         : "Save";
     const saveButtonVariant = saveButtonLabel === "Save" ? "primary"
         : saveButtonLabel === "Saved ✅" ? "success"
@@ -125,9 +101,9 @@ function Body(props: BodyProps) {
         setIsSaved(false);
     }, [config, setNewConfig]);
 
-    const onProvidersReadyToSave = React.useCallback((isReadyToSave: boolean) => {
-        setIsProvidersReadyToSave(isReadyToSave);
-    }, [setIsProvidersReadyToSave]);
+    const onUsenetSettingsReadyToSave = React.useCallback((isReadyToSave: boolean) => {
+        setIsUsenetSettingsReadyToSave(isReadyToSave);
+    }, [setIsUsenetSettingsReadyToSave]);
 
     const onSave = React.useCallback(async () => {
         setIsSaving(true);
@@ -151,17 +127,27 @@ function Body(props: BodyProps) {
     return (
         <div className={styles.container}>
             <Tabs
-                defaultActiveKey="providers"
+                activeKey={activeTab}
+                onSelect={x => setActiveTab(x!)}
                 className={styles.tabs}
             >
-                <Tab eventKey="providers" title={providersTitle}>
-                    <UsenetProviders config={newConfig} setNewConfig={setNewConfig} onReadyToSave={onProvidersReadyToSave}/>
+                <Tab eventKey="usenet" title={usenetTitle}>
+                    <UsenetSettings config={newConfig} setNewConfig={setNewConfig} onReadyToSave={onUsenetSettingsReadyToSave} />
                 </Tab>
                 <Tab eventKey="sabnzbd" title={sabnzbdTitle}>
                     <SabnzbdSettings config={newConfig} setNewConfig={setNewConfig} />
                 </Tab>
                 <Tab eventKey="webdav" title={webdavTitle}>
                     <WebdavSettings config={newConfig} setNewConfig={setNewConfig} />
+                </Tab>
+                <Tab eventKey="arrs" title={arrsTitle}>
+                    <ArrsSettings config={newConfig} setNewConfig={setNewConfig} />
+                </Tab>
+                <Tab eventKey="repairs" title={repairsTitle}>
+                    <RepairsSettings config={newConfig} setNewConfig={setNewConfig} />
+                </Tab>
+                <Tab eventKey="maintenance" title="Maintenance">
+                    <Maintenance savedConfig={config} />
                 </Tab>
             </Tabs>
             <hr />
@@ -188,24 +174,11 @@ function getChangedConfig(
     newConfig: Record<string, string>
 ): Record<string, string> {
     let changedConfig: Record<string, string> = {};
-    
-    // Check changes in default config keys
     let configKeys = Object.keys(defaultConfig);
     for (const configKey of configKeys) {
         if (config[configKey] !== newConfig[configKey]) {
             changedConfig[configKey] = newConfig[configKey];
         }
     }
-    
-    // Check changes in provider-specific keys
-    const allKeys = new Set([...Object.keys(config), ...Object.keys(newConfig)]);
-    for (const key of allKeys) {
-        if (key.startsWith("usenet.provider.")) {
-            if (key.endsWith(".connections") || config[key] !== newConfig[key]) {
-                changedConfig[key] = newConfig[key];
-            }
-        }
-    }
-    
     return changedConfig;
 }

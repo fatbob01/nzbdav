@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Database.Models;
 
 namespace NzbWebDAV.Database;
@@ -6,6 +6,23 @@ namespace NzbWebDAV.Database;
 public sealed class DavDatabaseClient(DavDatabaseContext ctx)
 {
     public DavDatabaseContext Ctx => ctx;
+
+    // file
+    public Task<DavItem?> GetFileById(string id)
+    {
+        var guid = Guid.Parse(id);
+        return ctx.Items.Where(i => i.Id == guid).FirstOrDefaultAsync();
+    }
+
+    public Task<List<DavItem>> GetFilesByIdPrefix(string prefix)
+    {
+        return ctx.Items
+            .Where(i => i.IdPrefix == prefix)
+            .Where(i => i.Type == DavItem.ItemType.NzbFile
+                        || i.Type == DavItem.ItemType.RarFile
+                        || i.Type == DavItem.ItemType.MultipartFile)
+            .ToListAsync();
+    }
 
     // directory
     public Task<List<DavItem>> GetDirectoryChildrenAsync(Guid dirId, CancellationToken ct = default)
@@ -59,8 +76,9 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
     }
 
     // queue
-    public Task<QueueItem?> GetTopQueueItem(DateTime nowTime, CancellationToken ct = default)
+    public Task<QueueItem?> GetTopQueueItem(CancellationToken ct = default)
     {
+        var nowTime = DateTime.Now;
         return Ctx.QueueItems
             .OrderByDescending(q => q.Priority)
             .ThenBy(q => q.CreatedAt)
@@ -99,52 +117,34 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
             .ToArrayAsync(cancellationToken: ct);
     }
 
-    public async Task RemoveQueueItemAsync(string id)
+    public async Task RemoveQueueItemsAsync(List<Guid> ids, CancellationToken ct = default)
     {
-        try
-        {
-            Ctx.QueueItems.Remove(new QueueItem() { Id = Guid.Parse(id) });
-            await Ctx.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException e)
-        {
-            var ignoredErrorMessage = "expected to affect 1 row(s), but actually affected 0 row(s)";
-            if (!e.Message.Contains(ignoredErrorMessage)) throw;
-        }
+        await Ctx.QueueItems
+            .Where(x => ids.Contains(x.Id))
+            .ExecuteDeleteAsync(ct);
     }
 
     // history
-    public async Task RemoveHistoryItemAsync(string id, bool delCompletedFiles = false)
+    public async Task<HistoryItem?> GetHistoryItemAsync(string id)
     {
-        try
-        {
-            var guid = Guid.Parse(id);
+        return await Ctx.HistoryItems.FirstOrDefaultAsync(x => x.Id == Guid.Parse(id));
+    }
 
-            if (delCompletedFiles)
-            {
-                var historyItem = await Ctx.HistoryItems.FirstOrDefaultAsync(x => x.Id == guid);
-                if (historyItem is not null)
-                {
-                    var categoryFolder = await Ctx.Items.FirstOrDefaultAsync(x =>
-                        x.ParentId == DavItem.ContentFolder.Id && x.Name == historyItem.Category);
-                    if (categoryFolder is not null)
-                    {
-                        var mountFolder = await Ctx.Items.FirstOrDefaultAsync(x =>
-                            x.ParentId == categoryFolder.Id && x.Name == historyItem.JobName);
-                        if (mountFolder is not null)
-                            Ctx.Items.Remove(mountFolder);
-                    }
-                }
-            }
-
-            Ctx.HistoryItems.Remove(new HistoryItem() { Id = guid });
-            await Ctx.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException e)
+    public async Task RemoveHistoryItemsAsync(List<Guid> ids, bool deleteFiles, CancellationToken ct = default)
+    {
+        if (deleteFiles)
         {
-            var ignoredErrorMessage = "expected to affect 1 row(s), but actually affected 0 row(s)";
-            if (!e.Message.Contains(ignoredErrorMessage)) throw;
+            await Ctx.Items
+                .Where(d => Ctx.HistoryItems
+                    .Where(h => ids.Contains(h.Id) && h.DownloadDirId != null)
+                    .Select(h => h.DownloadDirId!)
+                    .Contains(d.Id))
+                .ExecuteDeleteAsync(ct);
         }
+
+        await Ctx.HistoryItems
+            .Where(x => ids.Contains(x.Id))
+            .ExecuteDeleteAsync(ct);
     }
 
     private class FileSizeResult
@@ -152,13 +152,35 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
         public long TotalSize { get; init; }
     }
 
+    // health check
+    public async Task<List<HealthCheckStats>> GetHealthCheckStatsAsync
+    (
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken ct = default
+    )
+    {
+        return await Ctx.HealthCheckResults
+            .Where(h => h.CreatedAt >= from && h.CreatedAt <= to)
+            .GroupBy(h => new { h.Result, h.RepairStatus })
+            .Select(g => new HealthCheckStats
+            {
+                Result = g.Key.Result,
+                RepairStatus = g.Key.RepairStatus,
+                Count = g.Count()
+            })
+            .ToListAsync(ct);
+    }
+
     // completed-symlinks
-    public async Task<List<DavItem>> GetCompletedSymlinkCategoryChildren(string category, CancellationToken ct = default)
+    public async Task<List<DavItem>> GetCompletedSymlinkCategoryChildren(string category,
+        CancellationToken ct = default)
     {
         var query = from historyItem in Ctx.HistoryItems
             where historyItem.Category == category
                   && historyItem.DownloadStatus == HistoryItem.DownloadStatusOption.Completed
-            join davItem in Ctx.Items on historyItem.JobName equals davItem.Name
+                  && historyItem.DownloadDirId != null
+            join davItem in Ctx.Items on historyItem.DownloadDirId equals davItem.Id
             where davItem.Type == DavItem.ItemType.Directory
             select davItem;
         return await query.Distinct().ToListAsync(ct);

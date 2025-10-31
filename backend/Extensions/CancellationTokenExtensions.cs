@@ -1,60 +1,27 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 namespace NzbWebDAV.Extensions;
 
 public static class CancellationTokenExtensions
 {
-    private static readonly ConcurrentDictionary<CancellationToken, ConcurrentDictionary<Type, object>> _contexts = new();
+    private static readonly ConcurrentDictionary<CancellationToken, object?> Context = new();
 
-    public static CancellationTokenScopedContext<T> SetScopedContext<T>(this CancellationToken cancellationToken, T context)
+    public static CancellationTokenScopedContext SetScopedContext<T>(this CancellationToken ct, T? value)
     {
-        var typeMap = _contexts.GetOrAdd(cancellationToken, _ => new ConcurrentDictionary<Type, object>());
-        typeMap[typeof(T)] = context!;
-        return new CancellationTokenScopedContext<T>(cancellationToken);
+        Context[ct] = value;
+        return new CancellationTokenScopedContext(ct);
     }
 
-    public static T? GetContext<T>(this CancellationToken cancellationToken)
+    public static T? GetContext<T>(this CancellationToken ct)
     {
-        if (_contexts.TryGetValue(cancellationToken, out var typeMap) && typeMap.TryGetValue(typeof(T), out var value))
+        return Context.TryGetValue(ct, out var result) && result is T context ? context : default;
+    }
+
+    public class CancellationTokenScopedContext(CancellationToken ct) : IDisposable
+    {
+        public void Dispose()
         {
-            return (T)value;
+            Context.Remove(ct, out _);
         }
-
-        return default;
-    }
-
-    internal static void RemoveContext<T>(CancellationToken cancellationToken)
-    {
-        if (_contexts.TryGetValue(cancellationToken, out var typeMap))
-        {
-            typeMap.TryRemove(typeof(T), out _);
-
-            if (typeMap.IsEmpty)
-            {
-                _contexts.TryRemove(cancellationToken, out _);
-            }
-        }
-    }
-}
-
-public sealed class CancellationTokenScopedContext<T> : IDisposable
-{
-    private readonly CancellationToken _cancellationToken;
-    private bool _disposed;
-
-    internal CancellationTokenScopedContext(CancellationToken cancellationToken)
-    {
-        _cancellationToken = cancellationToken;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        CancellationTokenExtensions.RemoveContext<T>(_cancellationToken);
-        _disposed = true;
     }
 }

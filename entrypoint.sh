@@ -23,6 +23,21 @@ wait_either() {
     done
 }
 
+# Signal handling for graceful shutdown
+terminate() {
+    echo "Caught termination signal. Shutting down..."
+    if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+        kill "$BACKEND_PID"
+    fi
+    if [ -n "$FRONTEND_PID" ] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        kill "$FRONTEND_PID"
+    fi
+    # Wait for children to exit
+    wait
+    exit 0
+}
+trap terminate TERM INT
+
 # Use env vars or default to 1000
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
@@ -49,10 +64,42 @@ fi
 # Change permissions on /config directory to the given PUID and PGID
 chown $PUID:$PGID /config
 
-# Run backend as appuser in background
+# Run backend database migration
 cd /app/backend
+echo "Running database maintenance."
+su-exec appuser ./NzbWebDAV --db-migration
+if [ $? -ne 0 ]; then
+    echo "Database migration failed. Exiting with error code $?."
+    exit $?
+fi
+echo "Done with database maintenance."
+
+# Run backend as appuser in background
 su-exec appuser ./NzbWebDAV &
 BACKEND_PID=$!
+
+# Wait for backend health check
+echo "Waiting for backend to start."
+MAX_BACKEND_HEALTH_RETRIES=${MAX_BACKEND_HEALTH_RETRIES:-30}
+MAX_BACKEND_HEALTH_RETRY_DELAY=${MAX_BACKEND_HEALTH_RETRY_DELAY:-1}
+i=0
+while true; do
+    echo "Checking backend health: $BACKEND_URL/health ..."
+    if curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/health" | grep -q "^200$"; then
+        echo "Backend is healthy."
+        break
+    fi
+
+    i=$((i+1))
+    if [ "$i" -ge "$MAX_BACKEND_HEALTH_RETRIES" ]; then
+        echo "Backend failed health check after $MAX_BACKEND_HEALTH_RETRIES retries. Exiting."
+        kill $BACKEND_PID
+        wait $BACKEND_PID
+        exit 1
+    fi
+
+    sleep "$MAX_BACKEND_HEALTH_RETRY_DELAY"
+done
 
 # Run frontend as appuser in background
 cd /app/frontend

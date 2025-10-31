@@ -29,7 +29,6 @@ public static class IEnumerableTaskExtensions
 
         var isFirst = true;
         var runningTasks = new Queue<Task<T>>();
-        Task<T>? completedTask = null;
         try
         {
             foreach (var task in tasks)
@@ -44,24 +43,49 @@ public static class IEnumerableTaskExtensions
 
                 runningTasks.Enqueue(task);
                 if (runningTasks.Count < concurrency) continue;
-                completedTask = runningTasks.Dequeue();
-                yield return completedTask;
-                completedTask = null;
+                yield return runningTasks.Dequeue();
             }
 
             while (runningTasks.Count > 0)
-            {
-                completedTask = runningTasks.Dequeue();
-                yield return completedTask;
-                completedTask = null;
-            }
+                yield return runningTasks.Dequeue();
         }
         finally
         {
-            if (completedTask != null)
-                _ = completedTask.ContinueWith(x => x.Result.Dispose());
             while (runningTasks.Count > 0)
-                _ = runningTasks.Dequeue().ContinueWith(x => x.Result.Dispose());
+            {
+                runningTasks.Dequeue().ContinueWith(x =>
+                {
+                    if (x.Status == TaskStatus.RanToCompletion)
+                        x.Result.Dispose();
+                });
+            }
+        }
+    }
+
+    public static async IAsyncEnumerable<T> WithConcurrencyAsync<T>
+    (
+        this IEnumerable<Task<T>> tasks,
+        int concurrency
+    )
+    {
+        if (concurrency < 1)
+            throw new ArgumentException("concurrency must be greater than zero.");
+
+        var runningTasks = new HashSet<Task<T>>();
+        foreach (var task in tasks)
+        {
+            runningTasks.Add(task);
+            if (runningTasks.Count < concurrency) continue;
+            var completedTask = await Task.WhenAny(runningTasks);
+            runningTasks.Remove(completedTask);
+            yield return await completedTask;
+        }
+
+        while (runningTasks.Count > 0)
+        {
+            var completedTask = await Task.WhenAny(runningTasks);
+            runningTasks.Remove(completedTask);
+            yield return await completedTask;
         }
     }
 }

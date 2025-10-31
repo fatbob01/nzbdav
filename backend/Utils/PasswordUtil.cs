@@ -22,20 +22,11 @@ public static class PasswordUtil
         // database. Password hashing is intentionally designed to be super slow in order to slow down brute
         // force attacks. Several hundred milliseconds would be added to every single webdav request
         // when the "--use-cookies" Rclone argument is not used, if not for the memory cache added here.
-        var cacheKey = new CacheKey(hash, password, salt);
-        if (Cache.TryGetValue(cacheKey, out bool cachedResult))
+        return Cache.GetOrCreate(new CacheKey(hash, password, salt), cacheEntry =>
         {
-            return cachedResult;
-        }
-
-        var result = Hasher.VerifyHashedPassword(null!, hash, password + salt) == PasswordVerificationResult.Success;
-        Cache.Set(cacheKey, result, new MemoryCacheEntryOptions
-        {
-            Size = 1,
-            SlidingExpiration = TimeSpan.FromSeconds(30)
-        });
-
-        return result;
+            cacheEntry.Size = 1;
+            return Hasher.VerifyHashedPassword(null!, hash, password + salt);
+        }) == PasswordVerificationResult.Success;
     }
 
     private record CacheKey(string Hash, string Password, string Salt);

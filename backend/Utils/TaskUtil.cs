@@ -18,43 +18,20 @@ public static class TaskUtil
         var taskList = tasks.ToList();
         var totalTasks = taskList.Count();
         var completedTasks = 0;
-        
-        try
+        while (taskList.Count > 0)
         {
-            while (taskList.Count > 0)
+            var completedTask = await Task.WhenAny(taskList);
+            taskList.Remove(completedTask);
+
+            if (completedTask.IsFaulted)
             {
-                var completedTask = await Task.WhenAny(taskList);
-                taskList.Remove(completedTask);
-
-                if (completedTask.IsFaulted)
-                {
-                    // Cancel remaining tasks to prevent ObjectDisposedException
-                    foreach (var remainingTask in taskList)
-                    {
-                        try
-                        {
-                            // Give tasks a chance to clean up gracefully
-                            await Task.Delay(10);
-                        }
-                        catch
-                        {
-                            // Ignore cleanup errors
-                        }
-                    }
-                    
-                    throw completedTask?.Exception?.InnerException ??
-                        new Exception("An unknown error occurred.");
-                }
-
-                completedTasks++;
-                results.Add(completedTask.Result);
-                progress?.Report((completedTasks) * 100 / totalTasks);
+                throw completedTask?.Exception?.InnerException ??
+                    new Exception("An unknown error occurred.");
             }
-        }
-        catch (ObjectDisposedException ex) when (ex.ObjectName == "BufferToEndStream")
-        {
-            // Log the specific disposal issue but don't crash the entire process
-            throw new InvalidOperationException($"Stream was disposed during processing. This may indicate concurrent access to the same resource.", ex);
+
+            completedTasks++;
+            results.Add(completedTask.Result);
+            progress?.Report((completedTasks) * 100 / totalTasks);
         }
 
         return results;

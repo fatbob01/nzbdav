@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using NzbWebDAV.Clients;
+using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Exceptions;
 
 namespace NzbWebDAV.Api.Controllers.TestUsenetConnection;
@@ -12,7 +12,7 @@ public class TestUsenetConnectionController() : BaseApiController
     {
         try
         {
-            await SingleUsenetProvider.CreateNewConnection(
+            await UsenetStreamingClient.CreateNewConnection(
                 request.Host, request.Port, request.UseSsl, request.User, request.Pass, HttpContext.RequestAborted);
             return new TestUsenetConnectionResponse { Status = true, Connected = true };
         }
