@@ -96,14 +96,13 @@ export default function Health({ loaderData }: Route.ComponentProps) {
         const [davItemId, progress] = message.split('|');
         if (progress === "done") return;
         setQueueItems(queueItems => {
-            var index = queueItems.findIndex(x => x.id === davItemId);
-            if (index === -1) return queueItems;
-            return queueItems
-                .filter((_, i) => i >= index)
-                .map(item => item.id === davItemId
-                    ? { ...item, progress: Number(progress) }
-                    : item
-                )
+            let updated = false;
+            const next = queueItems.map(item => {
+                if (item.id !== davItemId) return item;
+                updated = true;
+                return { ...item, progress: Number(progress) };
+            });
+            return updated ? next : queueItems;
         });
     }, [setQueueItems]);
 
