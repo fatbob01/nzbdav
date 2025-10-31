@@ -72,11 +72,41 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
                     type="text"
                     id="max-queue-connections-input"
                     aria-describedby="max-queue-connections-help"
-                    placeholder="10"
+                    placeholder="All"
                     value={config["api.max-queue-connections"]}
                     onChange={e => setNewConfig({ ...config, "api.max-queue-connections": e.target.value })} />
                 <Form.Text id="max-queue-connections-help" muted>
-                    Queue processing tasks will not use any more than this number of connections.
+                    Queue processing tasks will not use any more than this number of connections. Will default to your overall Max Connections if left empty.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Label htmlFor="ignored-file-extensions-input">Ignored File Extensions</Form.Label>
+                <Form.Control
+                    className={styles.input}
+                    type="text"
+                    id="ignored-file-extensions-input"
+                    aria-describedby="ignored-file-extensions-help"
+                    placeholder=".nfo, .par2, .sfv"
+                    value={config["api.download-extension-blacklist"]}
+                    onChange={e => setNewConfig({ ...config, "api.download-extension-blacklist": e.target.value })} />
+                <Form.Text id="ignored-file-extensions-help" muted>
+                    Files with these extensions will be ignored and not mounted onto the webdav when processing an nzb.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Label htmlFor="duplicate-nzb-input">Behavior for Duplicate NZBs</Form.Label>
+                <Form.Select
+                    className={styles.input}
+                    value={config["api.duplicate-nzb-behavior"]}
+                    onChange={e => setNewConfig({ ...config, "api.duplicate-nzb-behavior": e.target.value })}
+                >
+                    <option value="increment">Download again with suffix (2)</option>
+                    <option value="mark-failed">Mark the download as failed</option>
+                </Form.Select>
+                <Form.Text id="max-queue-connections-help" muted>
+                    When an NZB is added, a new folder is created on the webdav. What should be done when the download folder for an NZB already exists?
                 </Form.Text>
             </Form.Group>
             <hr />
@@ -134,6 +164,8 @@ export function isSabnzbdSettingsUpdated(config: Record<string, string>, newConf
         || config["api.ensure-importable-video"] !== newConfig["api.ensure-importable-video"]
         || config["api.ensure-article-existence"] !== newConfig["api.ensure-article-existence"]
         || config["api.ignore-history-limit"] !== newConfig["api.ignore-history-limit"]
+        || config["api.duplicate-nzb-behavior"] !== newConfig["api.duplicate-nzb-behavior"]
+        || config["api.download-extension-blacklist"] !== newConfig["api.download-extension-blacklist"]
 }
 
 export function isSabnzbdSettingsValid(newConfig: Record<string, string>) {

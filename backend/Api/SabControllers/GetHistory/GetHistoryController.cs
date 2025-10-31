@@ -27,9 +27,23 @@ public class GetHistoryController(
             .Take(request.Limit)
             .ToArrayAsync(request.CancellationToken);
 
+        // get download folders
+        var downloadFolderIds = historyItems.Select(x => x.DownloadDirId).ToHashSet();
+        var davItems = await dbClient.Ctx.Items
+            .Where(x => downloadFolderIds.Contains(x.Id))
+            .ToArrayAsync(request.CancellationToken);
+        var davItemsDict = davItems
+            .ToDictionary(x => x.Id, x => x);
+
         // get slots
         var slots = historyItems
-            .Select(x => GetHistoryResponse.HistorySlot.FromHistoryItem(x, configManager.GetRcloneMountDir()))
+            .Select(x =>
+                GetHistoryResponse.HistorySlot.FromHistoryItem(
+                    x,
+                    x.DownloadDirId != null ? davItemsDict.GetValueOrDefault(x.DownloadDirId.Value) : null,
+                    configManager.GetRcloneMountDir()
+                )
+            )
             .ToList();
 
         // return response

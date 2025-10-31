@@ -95,7 +95,7 @@ public class DatabaseStoreCollection(
                     davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager),
             DavItem.ItemType.SymlinkRoot =>
                 new DatabaseStoreSymlinkCollection(
-                    davItem, dbClient, configManager, ""),
+                    davItem, dbClient, configManager),
             DavItem.ItemType.NzbFile =>
                 new DatabaseStoreNzbFile(
                     davItem, httpContext, dbClient, usenetClient, configManager),

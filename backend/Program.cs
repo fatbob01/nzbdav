@@ -29,12 +29,19 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        // Update thread-pool
+        ThreadPool.GetMaxThreads(out var maxWorker, out var maxIo);
+        ThreadPool.SetMaxThreads(maxWorker, Math.Max(maxIo, 2000));
+        ThreadPool.SetMinThreads(100, 200);
+
         // Initialize logger
         var defaultLevel = LogEventLevel.Warning;
         var envLevel = Environment.GetEnvironmentVariable("LOG_LEVEL");
         var level = Enum.TryParse<LogEventLevel>(envLevel, true, out var parsed) ? parsed : defaultLevel;
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Is(level)
+            .MinimumLevel.Override("NWebDAV", LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
             .MinimumLevel.Override("Microsoft.AspNetCore.Hosting", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.AspNetCore.Mvc", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.AspNetCore.Routing", LogEventLevel.Warning)
@@ -109,7 +116,6 @@ class Program
         app.Services.GetRequiredService<HealthCheckService>();
 
         // run
-        app.UseSerilogRequestLogging();
         app.UseMiddleware<ExceptionMiddleware>();
         app.UseWebSockets();
         app.MapHealthChecks("/health");

@@ -167,7 +167,7 @@ public class ConfigManager
     {
         return int.Parse(
             StringUtil.EmptyToNull(GetConfigValue("repair.connections"))
-            ?? "0"
+            ?? GetMaxConnections().ToString()
         );
     }
 
@@ -177,7 +177,7 @@ public class ConfigManager
         var configValue = StringUtil.EmptyToNull(GetConfigValue("repair.enable"));
         var isRepairJobEnabled = (configValue != null ? bool.Parse(configValue) : defaultValue);
         return isRepairJobEnabled
-               && GetMaxConnections() > 0
+               && GetMaxRepairConnections() > 0
                && GetLibraryDir() != null
                && GetArrConfig().GetInstanceCount() > 0;
     }
@@ -188,6 +188,17 @@ public class ConfigManager
         return GetConfigValue<ArrConfig>("arr.instances") ?? defaultValue;
     }
 
+    public string GetDuplicateNzbBehavior()
+    {
+        var defaultValue = "increment";
+        return GetConfigValue("api.duplicate-nzb-behavior") ?? defaultValue;
+    }
+
+    public string GetDownloadExtensionBlacklist()
+    {
+        var defaultValue = ".nfo, .par2, .sfv";
+        return GetConfigValue("api.download-extension-blacklist") ?? defaultValue;
+    }
     public class ConfigEventArgs : EventArgs
     {
         public Dictionary<string, string> ChangedConfig { get; set; } = new();
