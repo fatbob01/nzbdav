@@ -26,7 +26,7 @@ public static class PasswordUtil
         {
             cacheEntry.Size = 1;
             return Hasher.VerifyHashedPassword(null!, hash, password + salt);
-        }) == PasswordVerificationResult.Success;
+        }) != PasswordVerificationResult.Failed;
     }
 
     private record CacheKey(string Hash, string Password, string Salt);
