@@ -1,6 +1,5 @@
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/route";
-import { sessionStorage } from "~/auth/authentication.server";
 import styles from "./route.module.css"
 import { Alert } from 'react-bootstrap';
 import { backendClient, type HistorySlot, type QueueSlot } from "~/clients/backend-client.server";
@@ -9,6 +8,7 @@ import { HistoryTable } from "./components/history-table/history-table";
 import { QueueTable } from "./components/queue-table/queue-table";
 import { useCallback, useEffect, useState } from "react";
 import { receiveMessage } from "~/utils/websocket-util";
+import { isAuthenticated } from "~/auth/authentication.server";
 
 const topicNames = {
     queueItemStatus: 'qs',
@@ -190,9 +190,7 @@ export default function Queue(props: Route.ComponentProps) {
 
 export async function action({ request }: Route.ActionArgs) {
     // ensure user is logged in
-    let session = await sessionStorage.getSession(request.headers.get("cookie"));
-    let user = session.get("user");
-    if (!user) return redirect("/login");
+    if (!await isAuthenticated(request)) return redirect("/login");
 
     try {
         const formData = await request.formData();

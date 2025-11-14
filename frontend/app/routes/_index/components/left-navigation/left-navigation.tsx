@@ -5,10 +5,11 @@ import type React from "react";
 import { LiveUsenetConnections } from "../live-usenet-connections/live-usenet-connections";
 
 export type LeftNavigationProps = {
-    version?: string
+    version?: string,
+    isFrontendAuthDisabled?: boolean,
 }
 
-export function LeftNavigation({ version }: LeftNavigationProps) {
+export function LeftNavigation({ version, isFrontendAuthDisabled }: LeftNavigationProps) {
     return (
         <div className={styles.container}>
             <Item target="/queue">
@@ -42,14 +43,16 @@ export function LeftNavigation({ version }: LeftNavigationProps) {
                 <div className={styles["footer-item"]}>
                     version: {version || 'unknown'}
                 </div>
-                <hr />
-                <Form method="post" action="/logout">
-                    <input name="confirm" value="true" type="hidden" />
-                    <button className={styles.unstyled + ' ' + styles.item} type="submit">
-                        <div className={styles["logout-icon"]} />
-                        <div className={styles.title}>Logout</div>
-                    </button>
-                </Form>
+                {!isFrontendAuthDisabled && <>
+                    <hr />
+                    <Form method="post" action="/logout">
+                        <input name="confirm" value="true" type="hidden" />
+                        <button className={styles.unstyled + ' ' + styles.item} type="submit">
+                            <div className={styles["logout-icon"]} />
+                            <div className={styles.title}>Logout</div>
+                        </button>
+                    </Form>
+                </>}
             </div>
         </div>
     );

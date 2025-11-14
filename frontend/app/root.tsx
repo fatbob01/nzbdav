@@ -12,7 +12,7 @@ import {
 import 'bootstrap/dist/css/bootstrap.min.css';
 import "./app.css";
 import type { Route } from "./+types/root";
-import { sessionStorage } from "~/auth/authentication.server";
+import { IS_FRONTEND_AUTH_DISABLED, isAuthenticated } from "~/auth/authentication.server";
 import { TopNavigation } from "./routes/_index/components/top-navigation/top-navigation";
 import { LeftNavigation } from "./routes/_index/components/left-navigation/left-navigation";
 import { PageLayout } from "./routes/_index/components/page-layout/page-layout";
@@ -25,12 +25,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (path === "/onboarding") return { useLayout: false };
 
   // ensure all other routes are authenticated
-  let session = await sessionStorage.getSession(request.headers.get("cookie"));
-  let user = session.get("user");
-  if (!user) return redirect("/login");
+  if (!await isAuthenticated(request)) return redirect("/login");
   return {
     useLayout: true,
-    version: process.env.NZBDAV_VERSION
+    version: process.env.NZBDAV_VERSION,
+    isFrontendAuthDisabled: IS_FRONTEND_AUTH_DISABLED,
   };
 }
 
@@ -55,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App({ loaderData }: Route.ComponentProps) {
-  const { useLayout, version } = loaderData;
+  const { useLayout, version, isFrontendAuthDisabled } = loaderData;
   const location = useLocation();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
@@ -71,7 +70,11 @@ export default function App({ loaderData }: Route.ComponentProps) {
       <PageLayout
         topNavComponent={TopNavigation}
         bodyChild={showLoading ? <Loading /> : <Outlet />}
-        leftNavChild={<LeftNavigation version={version} />} />
+        leftNavChild={
+          <LeftNavigation
+            version={version}
+            isFrontendAuthDisabled={isFrontendAuthDisabled} />
+        } />
     );
   }
 
