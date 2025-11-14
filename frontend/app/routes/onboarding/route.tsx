@@ -4,7 +4,7 @@ import type { Route } from "./+types/route";
 import { useState } from "react";
 import { backendClient } from "~/clients/backend-client.server";
 import { Form, redirect, useNavigation } from "react-router";
-import { sessionStorage } from "~/auth/authentication.server";
+import { isAuthenticated, setSessionUser } from "~/auth/authentication.server";
 
 type OnboardingPageData = {
     error: string
@@ -12,9 +12,7 @@ type OnboardingPageData = {
 
 export async function loader({ request }: Route.LoaderArgs) {
     // if already logged in, redirect to landing page
-    let session = await sessionStorage.getSession(request.headers.get("cookie"));
-    let user = session.get("user");
-    if (user) return redirect("/");
+    if (await isAuthenticated(request)) return redirect("/")
 
     // if we don't need to go through onboarding, redirect to login page
     const isOnboarding = await backendClient.isOnboarding();
@@ -96,6 +94,9 @@ export default function Index({ loaderData, actionData }: Route.ComponentProps) 
 
 export async function action({ request }: Route.ActionArgs) {
     try {
+        // if already logged in, redirect to landing page
+        if (await isAuthenticated(request)) return redirect("/")
+
         // if we don't need to go through onboarding, redirect to login page
         const isOnboarding = await backendClient.isOnboarding();
         if (!isOnboarding) return redirect("/login");
@@ -107,9 +108,8 @@ export async function action({ request }: Route.ActionArgs) {
         if (!username || !password) throw new Error("username and password required");
         var isSuccess = await backendClient.createAccount(username, password);
         if (!isSuccess) throw new Error("Unknown error creating account");
-        let session = await sessionStorage.getSession(request.headers.get("cookie"));
-        session.set("user", { username: username });
-        return redirect("/", { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
+        var responseInit = await setSessionUser(request, username);
+        return redirect("/", responseInit);
     }
     catch (error) {
         if (error instanceof Error) {
