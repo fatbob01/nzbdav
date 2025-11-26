@@ -29,15 +29,21 @@ const topicSubscriptions = {
 
 const maxItems = 100;
 export async function loader({ request }: Route.LoaderArgs) {
+    const categoriesPromise = backendClient.getConfig(["api.categories"]);
     var queuePromise = backendClient.getQueue(maxItems);
     var historyPromise = backendClient.getHistory(maxItems);
-    var queue = await queuePromise;
-    var history = await historyPromise;
+    const [configItems, queue, history] = await Promise.all([
+        categoriesPromise,
+        queuePromise,
+        historyPromise
+    ]);
+    const categories = parseCategories(configItems?.find(x => x.configName === "api.categories")?.configValue);
     return {
         queueSlots: queue?.slots || [],
         historySlots: history?.slots || [],
         totalQueueCount: queue?.noofslots || 0,
         totalHistoryCount: history?.noofslots || 0,
+        categories: categories,
     }
 }
 
@@ -170,7 +176,7 @@ export default function Queue(props: Route.ComponentProps) {
                         onIsRemovingChanged={onRemovingQueueSlots}
                         onRemoved={onRemoveQueueSlots}
                     /> :
-                    <EmptyQueue />}
+                    <EmptyQueue categories={props.loaderData.categories} />}
             </div>
 
             {/* history */}
@@ -196,7 +202,8 @@ export async function action({ request }: Route.ActionArgs) {
         const formData = await request.formData();
         const nzbFile = formData.get("nzbFile");
         if (nzbFile instanceof File) {
-            await backendClient.addNzb(nzbFile);
+            const category = getCategoryFromFormData(formData);
+            await backendClient.addNzb(nzbFile, category);
         } else {
             return { error: "Error uploading nzb." }
         }
@@ -216,4 +223,18 @@ export type PresentationHistorySlot = HistorySlot & {
 export type PresentationQueueSlot = QueueSlot & {
     isSelected?: boolean,
     isRemoving?: boolean,
+}
+
+function parseCategories(categories?: string): string[] {
+    const defaultCategories = process.env.CATEGORIES ?? "audio,software,tv,movies";
+    const categoriesValue = categories && categories.trim() !== "" ? categories : defaultCategories;
+    const parsedCategories = categoriesValue.split(',').map(x => x.trim()).filter(x => x !== "");
+    const categorySet = new Set(["uncategorized", ...(parsedCategories.length > 0 ? parsedCategories : ["uncategorized"])]);
+    return Array.from(categorySet);
+}
+
+function getCategoryFromFormData(formData: FormData): string {
+    const rawCategory = formData.get("category");
+    const category = typeof rawCategory === "string" ? rawCategory.trim() : "";
+    return category === "" ? "uncategorized" : category;
 }
