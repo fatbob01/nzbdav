@@ -93,8 +93,9 @@ class BackendClient {
         return data.history;
     }
 
-    public async addNzb(nzbFile: File): Promise<string> {
-        const url = process.env.BACKEND_URL + "/api?mode=addfile&cat=uncategorized&priority=0&pp=0";
+    public async addNzb(nzbFile: File, category: string): Promise<string> {
+        const encodedCategory = encodeURIComponent(category);
+        const url = process.env.BACKEND_URL + `/api?mode=addfile&cat=${encodedCategory}&priority=0&pp=0`;
 
         const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
         const response = await fetch(url, {

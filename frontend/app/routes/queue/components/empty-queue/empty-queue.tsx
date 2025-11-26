@@ -1,15 +1,27 @@
 import pageStyles from "../../route.module.css"
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./empty-queue.module.css"
 import { useDropzone, type FileWithPath } from 'react-dropzone'
 import { className } from "~/utils/styling";
 import { useFetcher } from "react-router";
 
-export function EmptyQueue() {
+type EmptyQueueProps = {
+    categories: string[],
+}
+
+export function EmptyQueue({ categories }: EmptyQueueProps) {
     const fetcher = useFetcher();
     const formRef = useRef<HTMLFormElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const categoriesWithDefault = useMemo(() => categories.length > 0 ? categories : ["uncategorized"], [categories]);
+    const [selectedCategory, setSelectedCategory] = useState(categoriesWithDefault[0]);
     const isSubmitting = (fetcher.state === 'submitting');
+
+    useEffect(() => {
+        setSelectedCategory(current => categoriesWithDefault.includes(current)
+            ? current
+            : categoriesWithDefault[0]);
+    }, [categoriesWithDefault]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         accept: { 'application/x-nzb': ['.nzb'] },
@@ -31,6 +43,21 @@ export function EmptyQueue() {
 
     return (
         <fetcher.Form ref={formRef} method="POST" encType="multipart/form-data">
+            <div className={styles.controls}>
+                <label className={styles.label} htmlFor="category-select">Category</label>
+                <select
+                    className={styles.select}
+                    id="category-select"
+                    name="category"
+                    value={selectedCategory}
+                    onChange={event => setSelectedCategory(event.target.value)}
+                    disabled={isSubmitting}
+                >
+                    {categoriesWithDefault.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                    ))}
+                </select>
+            </div>
             <div className={pageStyles["section-title"]}>
                 <h3>Queue</h3>
             </div>
