@@ -2,7 +2,6 @@
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
-using NzbWebDAV.Models;
 using NzbWebDAV.Utils;
 
 namespace NzbWebDAV.Config;
@@ -79,12 +78,6 @@ public class ConfigManager
 
     public int GetMaxConnections()
     {
-        var providerConfig = GetConfigValue<UsenetProviderConfig>("usenet.providers");
-        if (providerConfig?.Providers?.Count > 0)
-        {
-            return providerConfig.TotalPooledConnections;
-        }
-
         return int.Parse(
             StringUtil.EmptyToNull(GetConfigValue("usenet.connections"))
             ?? "10"
@@ -98,28 +91,6 @@ public class ConfigManager
             ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("CONNECTIONS_PER_STREAM"))
             ?? "1"
         );
-    }
-
-    public UsenetProviderConfig GetUsenetProviderConfig()
-    {
-        var defaultProvider = new UsenetProviderConfig
-        {
-            Providers =
-            [
-                new UsenetProviderConfig.ConnectionDetails
-                {
-                    Type = ProviderType.Pooled,
-                    Host = GetConfigValue("usenet.host") ?? string.Empty,
-                    Port = int.Parse(GetConfigValue("usenet.port") ?? "119"),
-                    UseSsl = bool.Parse(GetConfigValue("usenet.use-ssl") ?? "false"),
-                    User = GetConfigValue("usenet.user") ?? string.Empty,
-                    Pass = GetConfigValue("usenet.pass") ?? string.Empty,
-                    MaxConnections = GetMaxConnections(),
-                }
-            ]
-        };
-
-        return GetConfigValue<UsenetProviderConfig>("usenet.providers") ?? defaultProvider;
     }
 
     public string? GetWebdavUser()
