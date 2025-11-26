@@ -165,7 +165,7 @@ public class UsenetStreamingClient
         }
     }
 
-    private static UsenetProviderConfig? GetUpdatedConfig(ConfigEventArgs configEventArgs)
+    private static UsenetProviderConfig? GetUpdatedConfig(ConfigManager.ConfigEventArgs configEventArgs)
     {
         if (!configEventArgs.NewConfig.TryGetValue("usenet.providers", out var providerJson)) return null;
 

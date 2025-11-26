@@ -1,5 +1,6 @@
 ﻿using System.Runtime.ExceptionServices;
 using System.Linq;
+using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Models;
 using NzbWebDAV.Streams;
 using Serilog;
