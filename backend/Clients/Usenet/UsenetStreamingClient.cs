@@ -1,9 +1,13 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using NzbWebDAV.Clients.Usenet.Connections;
 using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Config;
 using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.Models;
 using NzbWebDAV.Streams;
 using NzbWebDAV.Websocket;
 using Usenet.Nntp.Responses;
@@ -13,50 +17,33 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public class UsenetStreamingClient
 {
-    private readonly INntpClient _client;
     private readonly WebsocketManager _websocketManager;
+    private readonly object _providerLock = new();
+    private List<(MultiConnectionNntpClient Client, ProviderType Type, ConnectionPool<INntpClient> Pool)> _providers = [];
+    private INntpClient _client;
+    private readonly Dictionary<int, (int Live, int Max, int Idle)> _providerStats = new();
 
     public UsenetStreamingClient(ConfigManager configManager, WebsocketManager websocketManager)
     {
         // initialize private members
         _websocketManager = websocketManager;
 
-        // get connection settings from config-manager
-        var host = configManager.GetConfigValue("usenet.host") ?? string.Empty;
-        var port = int.Parse(configManager.GetConfigValue("usenet.port") ?? "119");
-        var useSsl = bool.Parse(configManager.GetConfigValue("usenet.use-ssl") ?? "false");
-        var user = configManager.GetConfigValue("usenet.user") ?? string.Empty;
-        var pass = configManager.GetConfigValue("usenet.pass") ?? string.Empty;
-        var connections = configManager.GetMaxConnections();
-
-        // initialize the nntp-client
-        var createNewConnection = (CancellationToken ct) => CreateNewConnection(host, port, useSsl, user, pass, ct);
-        var connectionPool = CreateNewConnectionPool(connections, createNewConnection);
-        var multiConnectionClient = new MultiConnectionNntpClient(connectionPool);
-        var cache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 8192 });
-        _client = new CachingNntpClient(multiConnectionClient, cache);
+        ConfigureProviders(configManager.GetUsenetProviderConfig());
 
         // when config changes, update the connection-pool
         configManager.OnConfigChanged += (_, configEventArgs) =>
         {
             // if unrelated config changed, do nothing
-            if (!configEventArgs.ChangedConfig.ContainsKey("usenet.host") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.port") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.use-ssl") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.user") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.pass") &&
-                !configEventArgs.ChangedConfig.ContainsKey("usenet.connections")) return;
+            var touchedKeys = new[]
+            {
+                "usenet.host", "usenet.port", "usenet.use-ssl", "usenet.user", "usenet.pass",
+                "usenet.connections", "usenet.providers"
+            };
 
-            // update the connection-pool according to the new config
-            var connectionCount = int.Parse(configEventArgs.NewConfig["usenet.connections"]);
-            var newHost = configEventArgs.NewConfig["usenet.host"];
-            var newPort = int.Parse(configEventArgs.NewConfig["usenet.port"]);
-            var newUseSsl = bool.Parse(configEventArgs.NewConfig.GetValueOrDefault("usenet.use-ssl", "false"));
-            var newUser = configEventArgs.NewConfig["usenet.user"];
-            var newPass = configEventArgs.NewConfig["usenet.pass"];
-            var newConnectionPool = CreateNewConnectionPool(connectionCount, cancellationToken =>
-                CreateNewConnection(newHost, newPort, newUseSsl, newUser, newPass, cancellationToken));
-            multiConnectionClient.UpdateConnectionPool(newConnectionPool);
+            if (!configEventArgs.ChangedConfig.Keys.Any(key => touchedKeys.Contains(key))) return;
+
+            var providerConfig = GetUpdatedConfig(configEventArgs) ?? configManager.GetUsenetProviderConfig();
+            ConfigureProviders(providerConfig);
         };
     }
 
@@ -118,23 +105,87 @@ public class UsenetStreamingClient
         return _client.GetArticleHeadersAsync(segmentId, cancellationToken);
     }
 
+    private void ConfigureProviders(UsenetProviderConfig providerConfig)
+    {
+        lock (_providerLock)
+        {
+            foreach (var provider in _providers)
+            {
+                provider.Pool.OnConnectionPoolChanged -= OnProviderConnectionPoolChanged;
+                provider.Client.Dispose();
+            }
+
+            _providers = providerConfig.Providers
+                .Where(x => x.Type != ProviderType.Disabled && x.MaxConnections > 0)
+                .Select((provider, index) =>
+                {
+                    var connectionPool = CreateNewConnectionPool(
+                        provider.MaxConnections,
+                        cancellationToken => CreateNewConnection(
+                            provider.Host,
+                            provider.Port,
+                            provider.UseSsl,
+                            provider.User,
+                            provider.Pass,
+                            cancellationToken));
+
+                    connectionPool.OnConnectionPoolChanged += OnProviderConnectionPoolChanged;
+                    return (new MultiConnectionNntpClient(connectionPool), provider.Type, connectionPool);
+                })
+                .ToList();
+
+            var multiProviderClient = new MultiProviderNntpClient(
+                _providers.Select(x => (x.Client, x.Type)).ToList());
+            var cache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 8192 });
+            _client = new CachingNntpClient(multiProviderClient, cache);
+
+            _providerStats.Clear();
+            for (var i = 0; i < _providers.Count; i++)
+            {
+                _providerStats[i] = (0, 0, 0);
+            }
+        }
+    }
+
+    private void OnProviderConnectionPoolChanged(object? sender,
+        ConnectionPool<INntpClient>.ConnectionPoolChangedEventArgs args)
+    {
+        lock (_providerLock)
+        {
+            var providerIndex = _providers.FindIndex(x => x.Pool == sender);
+            if (providerIndex < 0) return;
+
+            _providerStats[providerIndex] = (args.Live, args.Max, args.Idle);
+
+            var live = _providerStats.Values.Sum(x => x.Live);
+            var max = _providerStats.Values.Sum(x => x.Max);
+            var idle = _providerStats.Values.Sum(x => x.Idle);
+            var message = $"{live}|{max}|{idle}";
+            _websocketManager.SendMessage(WebsocketTopic.UsenetConnections, message);
+        }
+    }
+
+    private static UsenetProviderConfig? GetUpdatedConfig(ConfigManager.ConfigEventArgs configEventArgs)
+    {
+        if (!configEventArgs.NewConfig.TryGetValue("usenet.providers", out var providerJson)) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<UsenetProviderConfig>(providerJson);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private ConnectionPool<INntpClient> CreateNewConnectionPool
     (
         int maxConnections,
         Func<CancellationToken, ValueTask<INntpClient>> connectionFactory
     )
     {
-        var connectionPool = new ConnectionPool<INntpClient>(maxConnections, connectionFactory);
-        connectionPool.OnConnectionPoolChanged += OnConnectionPoolChanged;
-        var args = new ConnectionPool<INntpClient>.ConnectionPoolChangedEventArgs(0, 0, maxConnections);
-        OnConnectionPoolChanged(connectionPool, args);
-        return connectionPool;
-    }
-
-    private void OnConnectionPoolChanged(object? _, ConnectionPool<INntpClient>.ConnectionPoolChangedEventArgs args)
-    {
-        var message = $"{args.Live}|{args.Max}|{args.Idle}";
-        _websocketManager.SendMessage(WebsocketTopic.UsenetConnections, message);
+        return new ConnectionPool<INntpClient>(maxConnections, connectionFactory);
     }
 
     public static async ValueTask<INntpClient> CreateNewConnection
