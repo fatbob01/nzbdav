@@ -6,6 +6,11 @@ public class UsenetProviderConfig
 {
     public List<ConnectionDetails> Providers { get; set; } = [];
 
+    public int TotalEnabledConnections => Math.Max(1, Providers
+        .Where(x => x.Type != ProviderType.Disabled)
+        .Select(x => x.MaxConnections)
+        .Sum());
+
     public int TotalPooledConnections => Math.Max(1, Providers
         .Where(x => x.Type == ProviderType.Pooled)
         .Select(x => x.MaxConnections)

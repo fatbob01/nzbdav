@@ -150,8 +150,8 @@ public class UsenetStreamingClient
     private MultiProviderNntpClient CreateMultiProviderClient(UsenetProviderConfig providerConfig)
     {
         var connectionPoolStats = new ConnectionPoolStats(providerConfig, _websocketManager);
-        var totalPooledConnectionCount = providerConfig.TotalPooledConnections;
-        var pooledSemaphore = new ExtendedSemaphoreSlim(totalPooledConnectionCount, totalPooledConnectionCount);
+        var totalConnectionCount = providerConfig.TotalEnabledConnections;
+        var pooledSemaphore = new ExtendedSemaphoreSlim(totalConnectionCount, totalConnectionCount);
         var providerClients = providerConfig.Providers
             .Select((provider, index) => CreateProviderClient(
                 provider,

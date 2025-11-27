@@ -82,7 +82,7 @@ public class ConfigManager
         var providerConfig = GetConfigValue<UsenetProviderConfig>("usenet.providers");
         if (providerConfig?.Providers?.Count > 0)
         {
-            return providerConfig.TotalPooledConnections;
+            return providerConfig.TotalEnabledConnections;
         }
 
         return int.Parse(
