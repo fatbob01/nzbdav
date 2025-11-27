@@ -15,15 +15,17 @@ namespace NzbWebDAV.Clients.Usenet;
 public class UsenetStreamingClient
 {
     private readonly CachingNntpClient _client;
+    private readonly ConfigManager _configManager;
     private readonly WebsocketManager _websocketManager;
 
     public UsenetStreamingClient(ConfigManager configManager, WebsocketManager websocketManager)
     {
         // initialize private members
+        _configManager = configManager;
         _websocketManager = websocketManager;
 
         // get connection settings from config-manager
-        var providerConfig = configManager.GetUsenetProviderConfig();
+        var providerConfig = BuildProviderConfig(configManager.GetConfigValue("usenet.providers"));
 
         // initialize the nntp-client
         var multiProviderClient = CreateMultiProviderClient(providerConfig);
@@ -37,7 +39,7 @@ public class UsenetStreamingClient
             if (!configEventArgs.ChangedConfig.TryGetValue("usenet.providers", out var rawConfig)) return;
 
             // update the connection-pool according to the new config
-            var newProviderConfig = JsonSerializer.Deserialize<UsenetProviderConfig>(rawConfig);
+            var newProviderConfig = BuildProviderConfig(rawConfig);
             var newMultiProviderClient = CreateMultiProviderClient(newProviderConfig!);
             _client.UpdateUnderlyingClient(newMultiProviderClient);
         };
@@ -103,6 +105,31 @@ public class UsenetStreamingClient
     public Task<UsenetArticleHeaders> GetArticleHeadersAsync(string segmentId, CancellationToken cancellationToken)
     {
         return _client.GetArticleHeadersAsync(segmentId, cancellationToken);
+    }
+
+    private UsenetProviderConfig BuildProviderConfig(string? rawConfig)
+    {
+        var parsedConfig = DeserializeProviderConfig(rawConfig);
+        if (parsedConfig?.Providers?.Count > 0)
+            return parsedConfig;
+
+        // fall back to the single-provider values to avoid breaking existing setups
+        return _configManager.GetUsenetProviderConfig();
+    }
+
+    private static UsenetProviderConfig? DeserializeProviderConfig(string? rawConfig)
+    {
+        if (string.IsNullOrWhiteSpace(rawConfig))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<UsenetProviderConfig>(rawConfig);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private ConnectionPool<INntpClient> CreateNewConnectionPool
