@@ -44,15 +44,36 @@ const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
     [ProviderType.BackupOnly]: "Backup Only",
 };
 
-function parseProviderConfig(jsonString: string): UsenetProviderConfig {
+function parseProviderConfig(config: Record<string, string>): UsenetProviderConfig {
+    const jsonString = config["usenet.providers"] ?? "";
     try {
-        if (!jsonString || jsonString.trim() === "") {
-            return { Providers: [] };
+        if (jsonString.trim() !== "") {
+            return JSON.parse(jsonString);
         }
-        return JSON.parse(jsonString);
     } catch {
-        return { Providers: [] };
+        // ignore malformed JSON and fall back to legacy keys
     }
+
+    const host = config["usenet.host"] ?? "";
+    const port = parseInt(config["usenet.port"] ?? "119", 10);
+    const useSsl = (config["usenet.use-ssl"] ?? "false").toLowerCase() === "true";
+    const user = config["usenet.user"] ?? "";
+    const pass = config["usenet.pass"] ?? "";
+    const maxConnections = Math.max(1, parseInt(config["usenet.connections"] ?? "10", 10));
+
+    return {
+        Providers: [
+            {
+                Type: ProviderType.Pooled,
+                Host: host,
+                Port: port,
+                UseSsl: useSsl,
+                User: user,
+                Pass: pass,
+                MaxConnections: maxConnections,
+            },
+        ],
+    };
 }
 
 function serializeProviderConfig(config: UsenetProviderConfig): string {
@@ -64,7 +85,7 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
     const [showModal, setShowModal] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [connections, setConnections] = useState<{[index: number]: ConnectionCounts}>({});
-    const providerConfig = useMemo(() => parseProviderConfig(config["usenet.providers"]), [config]);
+    const providerConfig = useMemo(() => parseProviderConfig(config), [config]);
 
     // handlers
     const handleAddProvider = useCallback(() => {
@@ -109,7 +130,7 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
             live: live,
             max: providerConfig.Providers[index]?.MaxConnections || 1
         }}));
-    }, [setConnections]);
+    }, [setConnections, providerConfig, showModal]);
 
     // effects
     useEffect(() => {
@@ -128,7 +149,7 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
             setConnections({});
         }
         return connect();
-    }, [setConnections, handleConnectionsMessage]);
+    }, [setConnections, handleConnectionsMessage, providerConfig]);
 
     // view
     return (
@@ -502,6 +523,7 @@ function ProviderModal({ show, provider, onClose, onSave }: ProviderModalProps) 
                                 <option value={ProviderType.Disabled}>Disabled</option>
                                 <option value={ProviderType.Pooled}>Pool Connections</option>
                                 <option value={ProviderType.BackupOnly}>Backup Only</option>
+                                <option value={ProviderType.BackupAndStats}>Backup &amp; Health Checks</option>
                             </select>
                         </div>
 
