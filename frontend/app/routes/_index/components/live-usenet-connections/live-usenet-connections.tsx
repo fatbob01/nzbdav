@@ -8,11 +8,16 @@ const usenetConnectionsTopic = {'cxs': 'state'};
 export function LiveUsenetConnections() {
     const navigate = useNavigate();
     const [connections, setConnections] = useState<string | null>(null);
-    const parts = (connections || "0|1|0").split("|");
-    const [live, max, idle] = parts.map(x => Number(x));
+    const parts = (connections || "").split("|").filter(Boolean).map(x => Number(x));
+
+    const live = parts.length >= 6 ? parts[3] : (parts[0] ?? 0);
+    const max = parts.length >= 6 ? parts[4] : (parts[1] ?? 1);
+    const idle = parts.length >= 6 ? parts[5] : (parts[2] ?? 0);
+
+    const safeMax = max === 0 ? 1 : max;
     const active = live - idle;
-    const activePercent = 100 * (active / max);
-    const livePercent = 100 * (live / max);
+    const activePercent = 100 * (active / safeMax);
+    const livePercent = 100 * (live / safeMax);
 
     useEffect(() => {
         let ws: WebSocket;

@@ -7,13 +7,17 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public class CachingNntpClient(INntpClient client, MemoryCache cache) : WrappingNntpClient(client)
 {
-    private readonly INntpClient _client = client;
-
     private readonly MemoryCacheEntryOptions _cacheOptions = new()
     {
         Size = 1,
         SlidingExpiration = TimeSpan.FromHours(3)
     };
+
+    public void UpdateUnderlyingClient(INntpClient client)
+    {
+        var oldClient = SwapUnderlyingClient(client);
+        oldClient?.Dispose();
+    }
 
     public override async Task<YencHeaderStream> GetSegmentStreamAsync
     (
@@ -23,7 +27,7 @@ public class CachingNntpClient(INntpClient client, MemoryCache cache) : Wrapping
     )
     {
         var cacheKey = segmentId;
-        var stream = await _client.GetSegmentStreamAsync(segmentId, includeHeaders, ct);
+        var stream = await Client.GetSegmentStreamAsync(segmentId, includeHeaders, ct);
         cache.Set(cacheKey, stream.Header, _cacheOptions);
         return stream;
     }
@@ -34,7 +38,7 @@ public class CachingNntpClient(INntpClient client, MemoryCache cache) : Wrapping
         return (await cache.GetOrCreateAsync(cacheKey, cacheEntry =>
         {
             cacheEntry.SetOptions(_cacheOptions);
-            return _client.GetSegmentYencHeaderAsync(segmentId, ct);
+            return Client.GetSegmentYencHeaderAsync(segmentId, ct);
         })!)!;
     }
 

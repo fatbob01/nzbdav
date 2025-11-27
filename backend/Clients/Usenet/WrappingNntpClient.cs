@@ -1,3 +1,4 @@
+using System.Threading;
 ﻿using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Streams;
 using Usenet.Nntp.Responses;
@@ -8,29 +9,33 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public abstract class WrappingNntpClient(INntpClient client) : INntpClient
 {
+    private INntpClient _client = client;
+
+    protected INntpClient Client => _client;
+
     public virtual Task<bool> ConnectAsync(string host, int port, bool useSsl, CancellationToken cancellationToken)
     {
-        return client.ConnectAsync(host, port, useSsl, cancellationToken);
+        return _client.ConnectAsync(host, port, useSsl, cancellationToken);
     }
 
     public virtual Task<bool> AuthenticateAsync(string user, string pass, CancellationToken cancellationToken)
     {
-        return client.AuthenticateAsync(user, pass, cancellationToken);
+        return _client.AuthenticateAsync(user, pass, cancellationToken);
     }
 
     public virtual Task<NntpStatResponse> StatAsync(string segmentId, CancellationToken cancellationToken)
     {
-        return client.StatAsync(segmentId, cancellationToken);
+        return _client.StatAsync(segmentId, cancellationToken);
     }
 
     public virtual Task<NntpDateResponse> DateAsync(CancellationToken cancellationToken)
     {
-        return client.DateAsync(cancellationToken);
+        return _client.DateAsync(cancellationToken);
     }
 
     public Task<UsenetArticleHeaders> GetArticleHeadersAsync(string segmentId, CancellationToken cancellationToken)
     {
-        return client.GetArticleHeadersAsync(segmentId, cancellationToken);
+        return _client.GetArticleHeadersAsync(segmentId, cancellationToken);
     }
 
     public virtual Task<YencHeaderStream> GetSegmentStreamAsync
@@ -40,27 +45,33 @@ public abstract class WrappingNntpClient(INntpClient client) : INntpClient
         CancellationToken cancellationToken
     )
     {
-        return client.GetSegmentStreamAsync(segmentId, includeHeaders, cancellationToken);
+        return _client.GetSegmentStreamAsync(segmentId, includeHeaders, cancellationToken);
     }
 
     public virtual Task<YencHeader> GetSegmentYencHeaderAsync(string segmentId, CancellationToken cancellationToken)
     {
-        return client.GetSegmentYencHeaderAsync(segmentId, cancellationToken);
+        return _client.GetSegmentYencHeaderAsync(segmentId, cancellationToken);
     }
 
     public virtual Task<long> GetFileSizeAsync(NzbFile file, CancellationToken cancellationToken)
     {
-        return client.GetFileSizeAsync(file, cancellationToken);
+        return _client.GetFileSizeAsync(file, cancellationToken);
     }
 
     public virtual Task WaitForReady(CancellationToken cancellationToken)
     {
-        return client.WaitForReady(cancellationToken);
+        return _client.WaitForReady(cancellationToken);
+    }
+
+    protected INntpClient? SwapUnderlyingClient(INntpClient newClient)
+    {
+        var oldClient = Interlocked.Exchange(ref _client, newClient);
+        return oldClient;
     }
 
     public void Dispose()
     {
-        client.Dispose();
+        _client.Dispose();
         GC.SuppressFinalize(this);
     }
 }
