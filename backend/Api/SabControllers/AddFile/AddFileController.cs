@@ -53,6 +53,9 @@ public class AddFileController(
         var message = GetQueueResponse.QueueSlot.FromQueueItem(queueItem).ToJson();
         _ = websocketManager.SendMessage(WebsocketTopic.QueueItemAdded, message);
 
+        // awaken the queue if it is sleeping
+        queueManager.AwakenQueue();
+
         // return response
         return new AddFileResponse()
         {
@@ -63,7 +66,7 @@ public class AddFileController(
 
     protected override async Task<IActionResult> Handle()
     {
-        var request = await AddFileRequest.New(httpContext);
+        var request = await AddFileRequest.New(httpContext, configManager);
         return Ok(await AddFileAsync(request));
     }
 

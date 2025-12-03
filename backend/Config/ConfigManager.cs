@@ -77,6 +77,12 @@ public class ConfigManager
                ?? "audio,software,tv,movies";
     }
 
+    public string GetManualUploadCategory()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("api.manual-category"))
+               ?? "uncategorized";
+    }
+
     public int GetMaxConnections()
     {
         var providerConfig = GetConfigValue<UsenetProviderConfig>("usenet.providers");
