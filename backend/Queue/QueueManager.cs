@@ -18,6 +18,9 @@ public class QueueManager : IDisposable
     private readonly ConfigManager _configManager;
     private readonly WebsocketManager _websocketManager;
 
+    private CancellationTokenSource _sleepingQueueToken = new();
+    private readonly object _sleepingQueueLock = new();
+
     public QueueManager(
         UsenetStreamingClient usenetClient,
         ConfigManager configManager,
@@ -35,6 +38,14 @@ public class QueueManager : IDisposable
     public (QueueItem? queueItem, int? progress) GetInProgressQueueItem()
     {
         return (_inProgressQueueItem?.QueueItem, _inProgressQueueItem?.ProgressPercentage);
+    }
+
+    public void AwakenQueue()
+    {
+        lock (_sleepingQueueLock)
+        {
+            _sleepingQueueToken.Cancel();
+        }
     }
 
     public async Task RemoveQueueItemsAsync
@@ -71,9 +82,22 @@ public class QueueManager : IDisposable
                 var topItem = await LockAsync(() => dbClient.GetTopQueueItem(ct));
                 if (topItem.queueItem is null || topItem.queueNzbContents is null)
                 {
-                    // if we're done with the queue, wait
-                    // five seconds before checking again.
-                    await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                    try
+                    {
+                        // if we're done with the queue, wait a minute before checking again.
+                        // or wait until awoken by cancellation of _sleepingQueueToken
+                        using var sleepingQueueCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _sleepingQueueToken.Token);
+                        await Task.Delay(TimeSpan.FromMinutes(1), sleepingQueueCts.Token);
+                    }
+                    catch when (_sleepingQueueToken.IsCancellationRequested)
+                    {
+                        lock (_sleepingQueueLock)
+                        {
+                            _sleepingQueueToken.Dispose();
+                            _sleepingQueueToken = new CancellationTokenSource();
+                        }
+                    }
+
                     continue;
                 }
 
@@ -172,6 +196,8 @@ public class QueueManager : IDisposable
     {
         _cancellationTokenSource?.Cancel();
         _cancellationTokenSource?.Dispose();
+        _sleepingQueueToken.Cancel();
+        _sleepingQueueToken.Dispose();
     }
 
     private class InProgressQueueItem
