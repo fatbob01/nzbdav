@@ -1,5 +1,5 @@
 ﻿using System.Net;
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using NzbWebDAV.Clients.RadarrSonarr.BaseModels;
 using NzbWebDAV.Config;
@@ -60,7 +60,10 @@ public class ArrClient(string host, string apiKey)
     protected async Task<T> Post<T>(string path, object body)
     {
         using var httpClient = GetHttpClient();
-        using var response = await httpClient.PostAsJsonAsync(GetRequestUri(path), body);
+        var request = new HttpRequestMessage(HttpMethod.Post, GetRequestUri(path));
+        var jsonBody = JsonSerializer.Serialize(body);
+        request.Content = new StringContent(jsonBody, new MediaTypeHeaderValue("application/json"));
+        using var response = await httpClient.SendAsync(request);
         await using var stream = await response.Content.ReadAsStreamAsync();
         return await JsonSerializer.DeserializeAsync<T>(stream) ?? throw new NullReferenceException();
     }
