@@ -352,7 +352,7 @@ public class QueueItemProcessor(
             var downloadClients = await arrClient.GetDownloadClientsAsync();
             if (downloadClients.All(x => x.Category != queueItem.Category)) return;
             var queueCount = await arrClient.GetQueueCountAsync();
-            if (queueCount < 60) await arrClient.RefreshMonitoredDownloads();
+            if (queueCount < 300) await arrClient.RefreshMonitoredDownloads();
         }
         catch (Exception e)
         {
