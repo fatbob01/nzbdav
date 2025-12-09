@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
