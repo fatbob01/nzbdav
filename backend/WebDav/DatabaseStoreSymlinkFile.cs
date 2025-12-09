@@ -26,12 +26,41 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        var pathParts = davFile.IdPrefix
+        var idSegments = davFile.IdPrefix
             .Select(x => x.ToString())
             .Prepend(DavItem.IdsFolder.Name)
+            .Append(davFile.Id.ToString());
+
+        if (IsWindowsStylePath(mountDir))
+        {
+            var separator = mountDir.Contains('\\') ? '\\' : '/';
+            return JoinWithSeparator(mountDir, separator, idSegments);
+        }
+
+        var pathParts = idSegments
             .Prepend(mountDir)
-            .Append(davFile.Id.ToString())
             .ToArray();
+
         return Path.Join(pathParts);
+    }
+
+    private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
+    {
+        var builder = new StringBuilder(mountDir.TrimEnd('\\', '/'));
+        foreach (var segment in idSegments)
+        {
+            builder.Append(separator);
+            builder.Append(segment);
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsWindowsStylePath(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return false;
+
+        return mountDir.StartsWith("\\\\")
+               || (mountDir.Length >= 2 && char.IsLetter(mountDir[0]) && mountDir[1] == ':');
     }
 }
