@@ -37,13 +37,14 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             // backslashes are used, some consumers (e.g., Radarr) can misinterpret the
             // characters and fail to resolve the link target. Normalizing the path to
             // forward slashes preserves the Windows drive/UNC prefix while avoiding the
-            // misinterpretation that happens with backslashes.
-            var normalizedMount = mountDir.TrimEnd('\\', '/').Replace('\\', '/');
+            // misinterpretation that happens with backslashes. Consumers should normalize
+            // to the same format before comparing prefixes.
+            var normalizedMount = NormalizeMountDir(mountDir);
             return JoinWithSeparator(normalizedMount, '/', idSegments);
         }
 
         var pathParts = idSegments
-            .Prepend(mountDir)
+            .Prepend(NormalizeMountDir(mountDir))
             .ToArray();
 
         return Path.Join(pathParts);
@@ -59,6 +60,19 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
 
         return builder.ToString();
+    }
+
+    public static string NormalizeMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+
+        var trimmed = mountDir.TrimEnd('\\', '/');
+        return IsWindowsStylePath(trimmed) ? trimmed.Replace('\\', '/') : trimmed;
+    }
+
+    public static string NormalizePathSeparators(string path)
+    {
+        return string.IsNullOrEmpty(path) ? path : path.Replace('\\', '/');
     }
 
     private static bool IsWindowsStylePath(string mountDir)

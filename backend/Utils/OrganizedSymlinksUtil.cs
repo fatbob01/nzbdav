@@ -1,6 +1,7 @@
 ﻿using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.WebDav;
 
 namespace NzbWebDAV.Utils;
 
@@ -76,8 +77,9 @@ public static class OrganizedSymlinksUtil
         ConfigManager configManager
     )
     {
-        var mountDir = configManager.GetRcloneMountDir();
+        var mountDir = DatabaseStoreSymlinkFile.NormalizeMountDir(configManager.GetRcloneMountDir());
         return symlinkInfos
+            .Select(x => x with { TargetPath = DatabaseStoreSymlinkFile.NormalizePathSeparators(x.TargetPath) })
             .Where(x => x.TargetPath.StartsWith(mountDir))
             .Select(x => x with { TargetPath = x.TargetPath.RemovePrefix(mountDir) })
             .Select(x => x with { TargetPath = x.TargetPath.StartsWith('/') ? x.TargetPath : $"/{x.TargetPath}" })
