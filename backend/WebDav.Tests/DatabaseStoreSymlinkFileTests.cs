@@ -26,7 +26,7 @@ public class DatabaseStoreSymlinkFileTests
 
         var targetPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
 
-        Assert.Equal(@"C:/nzbdav/mount/.ids/0/0/0/0/0/00000000-0000-0000-0000-000000000111", targetPath);
+        Assert.Equal(@"C:\\nzbdav\\mount\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000111", targetPath);
     }
 
     [Fact]
@@ -49,6 +49,6 @@ public class DatabaseStoreSymlinkFileTests
 
         var targetPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
 
-        Assert.Equal(@"//server/share/nzbdav/.ids/0/0/0/0/0/00000000-0000-0000-0000-000000000222", targetPath);
+        Assert.Equal(@"\\\\server\\share\\nzbdav\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000222", targetPath);
     }
 }

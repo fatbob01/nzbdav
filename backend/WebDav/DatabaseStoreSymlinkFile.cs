@@ -33,14 +33,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
         if (IsWindowsStylePath(mountDir))
         {
-            // Rclone symlink targets are read as plain UTF-8 strings. When Windows-style
-            // backslashes are used, some consumers (e.g., Radarr) can misinterpret the
-            // characters and fail to resolve the link target. Normalizing the path to
-            // forward slashes preserves the Windows drive/UNC prefix while avoiding the
-            // misinterpretation that happens with backslashes. Consumers should normalize
-            // to the same format before comparing prefixes.
-            var normalizedMount = NormalizeMountDir(mountDir);
-            return JoinWithSeparator(normalizedMount, '/', idSegments);
+            // Rclone symlink targets are read as plain UTF-8 strings. Radarr and Sonarr expect
+            // Windows-style absolute paths (drive letter or UNC) to use backslashes immediately
+            // after the root. If we normalize to forward slashes, the drive portion can be
+            // treated as a relative folder name and the import will fail. Preserve the
+            // backslash separators so the target is parsed as an absolute Windows path.
+            var normalizedMount = NormalizeMountDirForWindowsTarget(mountDir);
+            return JoinWithSeparator(normalizedMount, '\\', idSegments);
         }
 
         var pathParts = idSegments
@@ -68,6 +67,14 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
         var trimmed = mountDir.TrimEnd('\\', '/');
         return IsWindowsStylePath(trimmed) ? trimmed.Replace('\\', '/') : trimmed;
+    }
+
+    private static string NormalizeMountDirForWindowsTarget(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+
+        var trimmed = mountDir.TrimEnd('\\', '/');
+        return trimmed.Replace('/', '\\');
     }
 
     public static string NormalizePathSeparators(string path)
