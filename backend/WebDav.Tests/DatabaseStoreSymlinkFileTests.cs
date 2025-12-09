@@ -74,4 +74,27 @@ public class DatabaseStoreSymlinkFileTests
 
         Assert.Equal(@"\\\\server\\share\\nzbdav\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000333", targetPath);
     }
+
+    [Fact]
+    public void GetTargetPath_NormalizesEscapedNewlinesInWindowsMountDir()
+    {
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000444");
+        var davItem = new DavItem
+        {
+            Id = id,
+            IdPrefix = id.ToString()[..5],
+            CreatedAt = new DateTime(2024, 1, 1),
+            ParentId = Guid.Empty,
+            Name = "test.nzb",
+            FileSize = null,
+            Type = DavItem.ItemType.NzbFile,
+            Path = "/test.nzb",
+        };
+
+        var mountDirWithEscapes = "C:\n zbdav\\mount".Replace(" ", string.Empty);
+
+        var targetPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDirWithEscapes);
+
+        Assert.Equal(@"C:\\nzbdav\\mount\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000444", targetPath);
+    }
 }

@@ -31,6 +31,8 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .Prepend(DavItem.IdsFolder.Name)
             .Append(davFile.Id.ToString());
 
+        mountDir = NormalizeEscapedMountDir(mountDir);
+
         if (IsWindowsStylePath(mountDir))
         {
             // Rclone symlink targets are read as plain UTF-8 strings. Radarr and Sonarr expect
@@ -47,6 +49,22 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .ToArray();
 
         return Path.Join(pathParts);
+    }
+
+    private static string NormalizeEscapedMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+
+        // Docker Compose treats backslashes in double-quoted strings as escape characters.
+        // A mount dir like "C:\\nzbdav\\mount" can be interpreted as "C:<newline>zbdav\\mount",
+        // which breaks the absolute target path used in the rclonelink. Convert the escaped
+        // control characters back into their literal representations so the resulting target path
+        // remains a valid Windows absolute path.
+        return mountDir
+            .Replace("\r\n", "\\r\\n")
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n")
+            .Replace("\t", "\\t");
     }
 
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
