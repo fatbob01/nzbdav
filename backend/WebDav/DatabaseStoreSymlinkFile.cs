@@ -87,6 +87,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         if (string.IsNullOrEmpty(mountDir)) return false;
 
         return mountDir.StartsWith("\\\\")
+               || mountDir.StartsWith("//")
                || (mountDir.Length >= 2 && char.IsLetter(mountDir[0]) && mountDir[1] == ':');
     }
 }
