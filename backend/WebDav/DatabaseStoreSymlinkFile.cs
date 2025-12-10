@@ -55,6 +55,18 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
 
+        // When users configure the mount dir from Windows hosts, environment
+        // escaping and odd clipboard behavior can occasionally swap the ASCII
+        // ':' and '\\' characters for their Private Use Area lookalikes.
+        // The resulting rclonelink target contains those private code points,
+        // which Radarr interprets as literal path characters, producing
+        // "Cnzbdav..." style paths that cannot be resolved on Windows.
+        // Normalize those glyphs back to their ASCII equivalents before we
+        // build the target path so the generated symlink resolves correctly.
+        mountDir = mountDir
+            .Replace('\uf03a', ':')
+            .Replace('\uf05c', '\\');
+
         // Docker Compose treats backslashes in double-quoted strings as escape characters.
         // A mount dir like "C:\\nzbdav\\mount" can be interpreted as "C:<newline>zbdav\\mount",
         // which breaks the absolute target path used in the rclonelink. Convert the escaped
