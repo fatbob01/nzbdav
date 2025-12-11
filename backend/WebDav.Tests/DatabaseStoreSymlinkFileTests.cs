@@ -120,4 +120,27 @@ public class DatabaseStoreSymlinkFileTests
 
         Assert.Equal(@"C:\\nzbdav\\mount\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000555", targetPath);
     }
+
+    [Fact]
+    public void GetTargetPath_ReplacesAlternatePrivateUseGlyphsInWindowsMountDir()
+    {
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000666");
+        var davItem = new DavItem
+        {
+            Id = id,
+            IdPrefix = id.ToString()[..5],
+            CreatedAt = new DateTime(2024, 1, 1),
+            ParentId = Guid.Empty,
+            Name = "test.nzb",
+            FileSize = null,
+            Type = DavItem.ItemType.NzbFile,
+            Path = "/test.nzb",
+        };
+
+        var mangledMountDir = "C\ue03a\ue05cnzbdav\ue05cmount";
+
+        var targetPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mangledMountDir);
+
+        Assert.Equal(@"C:\\nzbdav\\mount\\.ids\\0\\0\\0\\0\\0\\00000000-0000-0000-0000-000000000666", targetPath);
+    }
 }
