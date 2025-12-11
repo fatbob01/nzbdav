@@ -1,5 +1,6 @@
-using System.Text;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
@@ -82,14 +83,14 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     private static string NormalizePrivateUseGlyphs(string mountDir)
     {
         var builder = new StringBuilder(mountDir.Length);
-        var substitutionsMade = false;
+        var substitutions = new List<string>();
 
         foreach (var rune in mountDir.EnumerateRunes())
         {
-            if (TryNormalizePrivateUseGlyph(rune, out var ascii))
+            if (TryNormalizePrivateUseGlyph(rune, out var ascii, out var substitutionDescription))
             {
                 builder.Append(ascii);
-                substitutionsMade = true;
+                substitutions.Add(substitutionDescription);
             }
             else
             {
@@ -98,18 +99,39 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
 
         var normalized = builder.ToString();
-        if (substitutionsMade)
+        if (substitutions.Count > 0)
         {
-            Log.Debug("Normalized private-use glyphs in mountDir from '{OriginalMountDir}' to '{NormalizedMountDir}'", mountDir, normalized);
+            Log.Debug(
+                "Normalized private-use glyphs in mountDir from '{OriginalMountDir}' to '{NormalizedMountDir}' with substitutions: {Substitutions}",
+                mountDir,
+                normalized,
+                substitutions);
         }
 
         return normalized;
     }
 
-    private static bool TryNormalizePrivateUseGlyph(Rune rune, out char ascii)
+    private static bool TryNormalizePrivateUseGlyph(Rune rune, out char ascii, out string substitutionDescription)
     {
         ascii = default;
+        substitutionDescription = string.Empty;
         var codePoint = rune.Value;
+
+        switch (codePoint)
+        {
+            case 0xF03A:
+                ascii = ':';
+                substitutionDescription = "\uF03A->:";
+                return true;
+            case 0xF05C:
+                ascii = '\\';
+                substitutionDescription = "\uF05C->\\";
+                return true;
+            case 0xF02F:
+                ascii = '/';
+                substitutionDescription = "\uF02F->/";
+                return true;
+        }
 
         var inPrivateUseRange = (codePoint >= 0xE000 && codePoint <= 0xF8FF)
                                  || (codePoint >= 0xF0000 && codePoint <= 0xFFFFD)
@@ -122,6 +144,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             if (IsPrivateUseMatch(codePoint, target))
             {
                 ascii = target;
+                substitutionDescription = $"PUA-{codePoint:X}->" + target;
                 return true;
             }
         }
@@ -145,9 +168,11 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return commonOffsets.Any(offset => codePoint - target == offset);
     }
 
+    private static readonly char[] TrimSeparators = { '\\', '/', '', '' };
+
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
     {
-        var builder = new StringBuilder(mountDir.TrimEnd('\\', '/'));
+        var builder = new StringBuilder(mountDir.TrimEnd(TrimSeparators));
         foreach (var segment in idSegments)
         {
             builder.Append(separator);
@@ -161,7 +186,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
 
-        var trimmed = mountDir.TrimEnd('\\', '/');
+        var trimmed = mountDir.TrimEnd(TrimSeparators);
         return IsWindowsStylePath(trimmed) ? trimmed.Replace('\\', '/') : trimmed;
     }
 
@@ -169,7 +194,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
 
-        var trimmed = mountDir.TrimEnd('\\', '/');
+        var trimmed = mountDir.TrimEnd(TrimSeparators);
         return trimmed.Replace('/', '\\');
     }
 
