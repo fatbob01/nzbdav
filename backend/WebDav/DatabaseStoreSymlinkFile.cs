@@ -84,16 +84,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         var builder = new StringBuilder(mountDir.Length);
         var substitutionsMade = false;
 
-        foreach (var ch in mountDir)
+        foreach (var rune in mountDir.EnumerateRunes())
         {
-            if (TryNormalizePrivateUseGlyph(ch, out var ascii))
+            if (TryNormalizePrivateUseGlyph(rune, out var ascii))
             {
                 builder.Append(ascii);
                 substitutionsMade = true;
             }
             else
             {
-                builder.Append(ch);
+                builder.Append(rune.ToString());
             }
         }
 
@@ -106,15 +106,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return normalized;
     }
 
-    private static bool TryNormalizePrivateUseGlyph(char ch, out char ascii)
+    private static bool TryNormalizePrivateUseGlyph(Rune rune, out char ascii)
     {
-        ascii = ch;
-        var codePoint = ch;
+        ascii = default;
+        var codePoint = rune.Value;
 
-        if (codePoint < 0xE000 || codePoint > 0xF8FF)
-        {
-            return false;
-        }
+        var inPrivateUseRange = (codePoint >= 0xE000 && codePoint <= 0xF8FF)
+                                 || (codePoint >= 0xF0000 && codePoint <= 0xFFFFD)
+                                 || (codePoint >= 0x100000 && codePoint <= 0x10FFFD);
+
+        if (!inPrivateUseRange) return false;
 
         foreach (var target in new[] { ':', '\\', '/' })
         {
@@ -135,7 +136,12 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             return true;
         }
 
-        var commonOffsets = new[] { 0xE000, 0xF000, 0xF020, 0xF040, 0xF100 };
+        var commonOffsets = new[]
+        {
+            0xE000, 0xF000, 0xF020, 0xF040, 0xF100,
+            0xF0000, 0xF0020, 0xF0040, 0xF0100,
+            0x100000, 0x100020, 0x100040, 0x100100
+        };
         return commonOffsets.Any(offset => codePoint - target == offset);
     }
 
