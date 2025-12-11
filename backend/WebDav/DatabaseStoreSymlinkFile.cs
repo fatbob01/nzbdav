@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
@@ -81,27 +81,12 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     private static string NormalizePrivateUseGlyphs(string mountDir)
     {
-        var substitutions = new Dictionary<char, char>
-        {
-            ['\ue02f'] = '/',
-            ['\ue03a'] = ':',
-            ['\ue05c'] = '\\',
-            ['\uf02f'] = '/',
-            ['\uf03a'] = ':',
-            ['\uf05c'] = '\\',
-            ['\uf06f'] = '/',
-            ['\uf07c'] = '\\',
-            ['\uf12f'] = '/',
-            ['\uf13a'] = ':',
-            ['\uf15c'] = '\\',
-        };
-
         var builder = new StringBuilder(mountDir.Length);
         var substitutionsMade = false;
 
         foreach (var ch in mountDir)
         {
-            if (substitutions.TryGetValue(ch, out var ascii))
+            if (TryNormalizePrivateUseGlyph(ch, out var ascii))
             {
                 builder.Append(ascii);
                 substitutionsMade = true;
@@ -119,6 +104,39 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
 
         return normalized;
+    }
+
+    private static bool TryNormalizePrivateUseGlyph(char ch, out char ascii)
+    {
+        ascii = ch;
+        var codePoint = ch;
+
+        if (codePoint < 0xE000 || codePoint > 0xF8FF)
+        {
+            return false;
+        }
+
+        foreach (var target in new[] { ':', '\\', '/' })
+        {
+            if (IsPrivateUseMatch(codePoint, target))
+            {
+                ascii = target;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPrivateUseMatch(int codePoint, char target)
+    {
+        if ((codePoint & 0xFF) == target)
+        {
+            return true;
+        }
+
+        var commonOffsets = new[] { 0xE000, 0xF000, 0xF020, 0xF040, 0xF100 };
+        return commonOffsets.Any(offset => codePoint - target == offset);
     }
 
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
