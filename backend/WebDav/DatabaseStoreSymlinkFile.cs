@@ -3,6 +3,7 @@ using System.Text;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
+using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
@@ -82,19 +83,42 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         var substitutions = new Dictionary<char, char>
         {
+            ['\ue02f'] = '/',
+            ['\ue03a'] = ':',
+            ['\ue05c'] = '\\',
+            ['\uf02f'] = '/',
             ['\uf03a'] = ':',
             ['\uf05c'] = '\\',
             ['\uf06f'] = '/',
             ['\uf07c'] = '\\',
+            ['\uf12f'] = '/',
+            ['\uf13a'] = ':',
+            ['\uf15c'] = '\\',
         };
 
         var builder = new StringBuilder(mountDir.Length);
+        var substitutionsMade = false;
+
         foreach (var ch in mountDir)
         {
-            builder.Append(substitutions.TryGetValue(ch, out var ascii) ? ascii : ch);
+            if (substitutions.TryGetValue(ch, out var ascii))
+            {
+                builder.Append(ascii);
+                substitutionsMade = true;
+            }
+            else
+            {
+                builder.Append(ch);
+            }
         }
 
-        return builder.ToString();
+        var normalized = builder.ToString();
+        if (substitutionsMade)
+        {
+            Log.Debug("Normalized private-use glyphs in mountDir from '{OriginalMountDir}' to '{NormalizedMountDir}'", mountDir, normalized);
+        }
+
+        return normalized;
     }
 
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
