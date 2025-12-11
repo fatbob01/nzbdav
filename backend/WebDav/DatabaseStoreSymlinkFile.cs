@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
@@ -63,9 +64,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         // "Cnzbdav..." style paths that cannot be resolved on Windows.
         // Normalize those glyphs back to their ASCII equivalents before we
         // build the target path so the generated symlink resolves correctly.
-        mountDir = mountDir
-            .Replace('\uf03a', ':')
-            .Replace('\uf05c', '\\');
+        mountDir = NormalizePrivateUseGlyphs(mountDir);
 
         // Docker Compose treats backslashes in double-quoted strings as escape characters.
         // A mount dir like "C:\\nzbdav\\mount" can be interpreted as "C:<newline>zbdav\\mount",
@@ -77,6 +76,25 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .Replace("\r", "\\r")
             .Replace("\n", "\\n")
             .Replace("\t", "\\t");
+    }
+
+    private static string NormalizePrivateUseGlyphs(string mountDir)
+    {
+        var substitutions = new Dictionary<char, char>
+        {
+            ['\uf03a'] = ':',
+            ['\uf05c'] = '\\',
+            ['\uf06f'] = '/',
+            ['\uf07c'] = '\\',
+        };
+
+        var builder = new StringBuilder(mountDir.Length);
+        foreach (var ch in mountDir)
+        {
+            builder.Append(substitutions.TryGetValue(ch, out var ascii) ? ascii : ch);
+        }
+
+        return builder.ToString();
     }
 
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
