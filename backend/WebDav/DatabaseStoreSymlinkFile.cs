@@ -20,19 +20,21 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY: UNC Path via Localhost.
-                // 1. "C:" gets corrupted to "C".
-                // 2. "\" gets corrupted to "".
+                // STRATEGY: The "Short Path" Junction.
+                // 1. Absolute paths fail (C: -> C).
+                // 2. Backslashes fail (\ -> ).
                 // 3. Relative paths fail when Radarr moves the file.
                 //
-                // FIX: Use UNC format "//localhost/c$/path".
-                // This is an absolute path that Windows understands, but it 
-                // contains NO COLONS and NO BACKSLASHES (we use forward slash).
+                // FIX: We generate a target like "/ids/a/b/c...".
+                // This requires the user to create a junction on Windows:
+                // mklink /J C:\ids C:\nzbdav\mount\.ids
+                //
+                // This bypasses ALL Rclone corruption because the target string 
+                // contains only safe, standard ASCII characters.
                 
-                var target = GetUncTargetPath();
+                var target = GetJunctionTargetPath();
                 
-                // Log the final target. Expected: "//localhost/c$/nzbdav/mount/.ids/..."
-                Log.Error("[SYMLINK] Generated UNC Target: '{Target}'", target);
+                Log.Error("[SYMLINK] Generated Junction Target: '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -47,38 +49,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetUncTargetPath()
+    private string GetJunctionTargetPath()
     {
-        // 1. Get the configured path, e.g. "C:\nzbdav\mount"
-        var mountDir = configManager.GetRcloneMountDir() ?? "";
-        
-        // Default to 'c' if we can't find a drive letter, but try to parse it.
-        char driveLetter = 'c';
-        string remainingPath = mountDir;
-
-        // 2. Parse Drive Letter (e.g. "C:")
-        if (mountDir.Length > 1 && mountDir[1] == ':')
-        {
-            driveLetter = char.ToLowerInvariant(mountDir[0]);
-            remainingPath = mountDir.Substring(2); // "\nzbdav\mount"
-        }
-
-        // 3. Normalize path part to Forward Slashes
-        remainingPath = remainingPath.Replace('\\', '/').Trim('/');
-
-        // 4. Build UNC Path: //localhost/c$/nzbdav/mount/.ids/...
+        // Use the alias "/ids". 
+        // Rclone passes '/' through. Windows resolves '/' to the drive root 'C:\'.
+        // So "/ids" becomes "C:\ids".
         var sb = new StringBuilder();
-        sb.Append("//localhost/");
-        sb.Append(driveLetter);
-        sb.Append("$/");
-        
-        if (!string.IsNullOrEmpty(remainingPath))
-        {
-            sb.Append(remainingPath);
-            sb.Append('/');
-        }
-
-        sb.Append(DavItem.IdsFolder.Name); // .ids
+        sb.Append("/ids"); 
         
         foreach (var c in davFile.IdPrefix)
         {
