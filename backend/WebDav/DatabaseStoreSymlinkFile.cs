@@ -20,14 +20,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY: Use Relative Paths with FORWARD SLASHES.
-                // 1. Relative paths bypass the "Colons in absolute paths" corruption (C: -> C).
-                // 2. Forward slashes bypass the "Backslash encoded as " corruption (\ -> ).
-                // Rclone/Windows should resolve "../.ids/..." correctly.
-                var target = GetRelativeTargetPath();
+                // STRATEGY: Drive-Relative Absolute Path.
+                // 1. We cannot use "C:\" because Rclone corrupts the colon (C).
+                // 2. We cannot use "..\..\" because Radarr moves the file, breaking relative links.
+                // 3. SOLUTION: Use "/nzbdav/mount/.ids/...".
+                //    - Rclone sees a standard path (no colon).
+                //    - Windows interprets "/" as "Root of Current Drive" (C:\nzbdav\mount).
+                var target = GetDriveRelativePath();
                 
-                // Log strictly as error to ensure visibility
-                Log.Error("[SYMLINK] Relative Target Generated (Forward Slash): '{Target}'", target);
+                // Log for verification
+                Log.Error("[SYMLINK] Generated Drive-Relative Target: '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -42,59 +44,59 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetRelativeTargetPath()
+    private string GetDriveRelativePath()
     {
-        // 1. Calculate depth
-        // We look at the parent path to decide how many "../" we need to get back to Root.
-        var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
-        
-        // Split by '/' since internal paths are stored with forward slashes.
-        // We filter out empty entries to handle root "/" correctly.
-        var segments = parentPath.Trim('/').Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
-        var depth = segments.Length;
-        
-        var sb = new StringBuilder();
+        // 1. Get the configured mount directory (e.g. "C:\nzbdav\mount")
+        var mountDir = configManager.GetRcloneMountDir() ?? "";
 
-        // 2. Build "Go Up" string using FORWARD SLASH
-        // Rclone treats '\' in symlinks as a special filename char and corrupts it to .
-        // Forward slash is safe and standard for WebDAV.
-        for (int i = 0; i < depth; i++)
+        // 2. Strip Drive Letter if present (e.g. "C:")
+        // This prevents the Rclone colon corruption.
+        if (mountDir.Length > 1 && mountDir[1] == ':')
         {
-            sb.Append("../");
+            mountDir = mountDir.Substring(2); // "C:\path" -> "\path"
         }
 
-        // 3. Append the target path (.ids/...) using FORWARD SLASH
+        // 3. Normalize to Forward Slashes and ensure leading slash
+        // Forward slashes are standard for WebDAV and Rclone handles them natively.
+        // Windows is happy to resolve them too.
+        mountDir = mountDir.Replace('\\', '/');
+        if (!mountDir.StartsWith("/"))
+        {
+            mountDir = "/" + mountDir;
+        }
+        
+        // 4. Trim trailing slash to prepare for join
+        mountDir = mountDir.TrimEnd('/');
+
+        // 5. Build final path: /nzbdav/mount/.ids/p/r/e/GUID
+        var sb = new StringBuilder();
+        sb.Append(mountDir);
+        sb.Append('/');
         sb.Append(DavItem.IdsFolder.Name); // .ids
         
         foreach (var c in davFile.IdPrefix)
         {
-            sb.Append('/'); // Forward slash
+            sb.Append('/'); 
             sb.Append(c);
         }
         
-        sb.Append('/'); // Forward slash
+        sb.Append('/'); 
         sb.Append(davFile.Id);
 
         return sb.ToString();
     }
 
-    // Unused by this class but required for compilation compatibility with OrganizedSymlinksUtil
-    public static string GetTargetPath(DavItem davFile, string mountDir) 
-    {
-        return "";
-    }
+    // Unused but required for compilation compatibility
+    public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
 
     // ==============================================================================
-    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
+    // HELPER METHODS (Kept to prevent build errors in other files)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        var clean = mountDir
-            .Replace('\uF03A', ':')
-            .Replace('\uF05C', '\\')
-            .Replace('\uF02F', '/');
+        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
         return clean.TrimEnd('\\', '/').Replace('\\', '/');
     }
 
