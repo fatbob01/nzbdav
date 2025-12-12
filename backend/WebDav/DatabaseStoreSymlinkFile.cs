@@ -34,18 +34,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .Append(davFile.Id.ToString());
 
         // 1. Force explicit cleanup of the mount directory
-        mountDir = NormalizeEscapedMountDir(mountDir);
+        var cleanMountDir = NormalizeEscapedMountDir(mountDir);
 
-        if (IsWindowsStylePath(mountDir))
+        if (IsWindowsStylePath(cleanMountDir))
         {
-            // Rclone symlink targets are read as plain UTF-8 strings. Radarr/Sonarr expect
-            // Windows-style absolute paths.
-            var normalizedMount = NormalizeMountDirForWindowsTarget(mountDir);
+            var normalizedMount = NormalizeMountDirForWindowsTarget(cleanMountDir);
             return JoinWithSeparator(normalizedMount, '\\', idSegments);
         }
 
         var pathParts = idSegments
-            .Prepend(NormalizeMountDir(mountDir))
+            .Prepend(NormalizeMountDir(cleanMountDir))
             .ToArray();
 
         return Path.Join(pathParts);
@@ -55,20 +53,28 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
 
+        // LOGGING: Print the raw input to confirm what we are receiving
+        // If you do not see this log in Docker, the code has NOT been updated.
+        if (mountDir.Any(c => c == '\uF03A' || c == '\uF05C' || c == '\uF02F'))
+        {
+            Log.Warning("CORRUPTION DETECTED: MountDir contains Private Use characters! Raw: {RawMount}", mountDir);
+        }
+
         // HARD FIX: Explicitly replace the known PUA characters.
-        // The previous logic tried to guess these mathematically, but failed.
-        // \uF03A =  (Weird Colon)
-        // \uF05C =  (Weird Backslash)
-        // \uF02F =  (Weird Slash)
-        mountDir = mountDir
-            .Replace('\uF03A', ':')
-            .Replace('\uF05C', '\\')
-            .Replace('\uF02F', '/');
+        var fixedDir = mountDir
+            .Replace('\uF03A', ':')   // Weird Colon
+            .Replace('\uF05C', '\\')  // Weird Backslash
+            .Replace('\uF02F', '/');  // Weird Slash
+
+        if (fixedDir != mountDir)
+        {
+            Log.Warning("CORRUPTION FIXED: Remapped MountDir to: {FixedMount}", fixedDir);
+        }
 
         // Also normalize any other Private Use Area glyphs if they exist (fallback)
-        mountDir = NormalizePrivateUseGlyphs(mountDir);
+        fixedDir = NormalizePrivateUseGlyphs(fixedDir);
 
-        return mountDir
+        return fixedDir
             .Replace("\r\n", "\\r\\n")
             .Replace("\r", "\\r")
             .Replace("\n", "\\n")
@@ -93,13 +99,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             }
         }
 
-        var normalized = builder.ToString();
-        if (substitutionsMade)
-        {
-            Log.Debug("Normalized private-use glyphs in mountDir from '{OriginalMountDir}' to '{NormalizedMountDir}'", mountDir, normalized);
-        }
-
-        return normalized;
+        return builder.ToString();
     }
 
     private static bool TryNormalizePrivateUseGlyph(Rune rune, out char ascii)
@@ -127,10 +127,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     private static bool IsPrivateUseMatch(int codePoint, char target)
     {
-        if ((codePoint & 0xFF) == target)
-        {
-            return true;
-        }
+        if ((codePoint & 0xFF) == target) return true;
 
         var commonOffsets = new[]
         {
@@ -143,23 +140,19 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     private static string JoinWithSeparator(string mountDir, char separator, IEnumerable<string> idSegments)
     {
-        // IMPORTANT: Trim PUA backslashes (\uF05C) as well as standard ones
         var trimmedMount = mountDir.TrimEnd('\\', '/', '\uF05C');
-        
         var builder = new StringBuilder(trimmedMount);
         foreach (var segment in idSegments)
         {
             builder.Append(separator);
             builder.Append(segment);
         }
-
         return builder.ToString();
     }
 
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-
         var trimmed = mountDir.TrimEnd('\\', '/', '\uF05C');
         return IsWindowsStylePath(trimmed) ? trimmed.Replace('\\', '/').Replace('\uF05C', '/') : trimmed;
     }
@@ -167,7 +160,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     private static string NormalizeMountDirForWindowsTarget(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-
         var trimmed = mountDir.TrimEnd('\\', '/', '\uF05C');
         return trimmed.Replace('/', '\\').Replace('\uF05C', '\\');
     }
@@ -180,7 +172,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     private static bool IsWindowsStylePath(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return false;
-
         return mountDir.StartsWith("\\\\")
                || mountDir.StartsWith("//")
                || (mountDir.Length >= 2 && char.IsLetter(mountDir[0]) && (mountDir[1] == ':' || mountDir[1] == '\uF03A'));
