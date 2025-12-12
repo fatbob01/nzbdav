@@ -20,16 +20,20 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // FINAL STRATEGY: Hardcoded Drive-Relative Path.
-                // We force the path to be "/nzbdav/mount/.ids/..."
-                // 1. Forward slashes '/' prevent Rclone from mangling backslashes.
-                // 2. No drive letter (no 'C:') prevents Rclone from mangling colons.
-                // 3. Leading slash '/' tells Windows to look at the drive root.
-                // This will resolve to "C:\nzbdav\mount\.ids\..." on your machine.
+                // STRATEGY: Absolute Path with FORWARD SLASHES.
+                // 1. Previous attempts showed Rclone corrupts "C:\" to "C" (colon corruption).
+                // 2. Previous attempts showed Rclone corrupts "\" to "" (backslash corruption).
+                // 3. We MUST provide an absolute path ("C:") because Radarr moves the file, breaking relative links.
+                // 
+                // FIX: We use "C:/" (Forward Slash). 
+                // Many Windows APIs accept forward slashes, and this format often bypasses 
+                // the specific regex/encoding triggers in Rclone that corrupt backslashes.
                 
-                var target = GetHardcodedDriveRelativePath();
+                var target = GetHardcodedAbsolutePath();
                 
-                Log.Error("[SYMLINK] Generated Hardcoded Target: '{Target}'", target);
+                // Log the final target for debugging. 
+                // Expected output: "C:/nzbdav/mount/.ids/..."
+                Log.Error("[SYMLINK] Generated Absolute Target (Forward Slash): '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -44,16 +48,20 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetHardcodedDriveRelativePath()
+    private string GetHardcodedAbsolutePath()
     {
-        // HARDCODED FIX: 
-        // We assume your mount is at "C:\nzbdav\mount".
-        // We strip "C:" to make it drive-relative -> "/nzbdav/mount"
-        const string ManualMountPath = "/nzbdav/mount";
+        // HARDCODED CONFIGURATION
+        // Ensure this matches your exact mount path on Windows
+        const string ManualMountPath = "C:/nzbdav/mount";
 
         var sb = new StringBuilder();
         sb.Append(ManualMountPath);
-        sb.Append('/'); // Standard separator
+        // Ensure we don't double slash if the const has one
+        if (!ManualMountPath.EndsWith("/")) 
+        {
+            sb.Append('/');
+        }
+        
         sb.Append(DavItem.IdsFolder.Name); // .ids
         
         foreach (var c in davFile.IdPrefix)
@@ -78,7 +86,10 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
+        var clean = mountDir
+            .Replace('\uF03A', ':')
+            .Replace('\uF05C', '\\')
+            .Replace('\uF02F', '/');
         return clean.TrimEnd('\\', '/').Replace('\\', '/');
     }
 
