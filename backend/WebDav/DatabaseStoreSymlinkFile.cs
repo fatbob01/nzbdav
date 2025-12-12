@@ -20,13 +20,14 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY CHANGE: Use Relative Paths to bypass Rclone corruption.
-                // Rclone is corrupting "C:\" into "C" regardless of settings.
-                // Relative paths (e.g. "..\..\.ids\...") do not have colons, so they are safe.
+                // STRATEGY: Use Relative Paths with FORWARD SLASHES.
+                // 1. Relative paths bypass the "Colons in absolute paths" corruption (C: -> C).
+                // 2. Forward slashes bypass the "Backslash encoded as " corruption (\ -> ).
+                // Rclone/Windows should resolve "../.ids/..." correctly.
                 var target = GetRelativeTargetPath();
                 
-                // Log the generated target for verification
-                Log.Error("[SYMLINK] Relative Target Generated: '{Target}'", target);
+                // Log strictly as error to ensure visibility
+                Log.Error("[SYMLINK] Relative Target Generated (Forward Slash): '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -43,56 +44,57 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     private string GetRelativeTargetPath()
     {
-        // 1. Calculate how deep the current file is.
-        // Format is usually: /completed-symlinks/category/release_name/file.ext
-        // We need to go up enough levels to reach the root.
-        // We count the slashes in the parent path to determine depth.
-        // e.g. /completed-symlinks/movies/Movie.2025/ -> 3 levels deep -> needs "..\..\..\"
-        
+        // 1. Calculate depth
+        // We look at the parent path to decide how many "../" we need to get back to Root.
         var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
-        // Ensure we don't count empty segments if path is just "/"
+        
+        // Split by '/' since internal paths are stored with forward slashes.
+        // We filter out empty entries to handle root "/" correctly.
         var segments = parentPath.Trim('/').Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
         var depth = segments.Length;
         
-        // 2. Build the "Go Up" string (e.g. "..\..\..")
-        // We use Windows backslashes '\' because Radarr/Windows expects them.
         var sb = new StringBuilder();
-        // We go up one extra level to get out of the "release_name" folder, 
-        // then "category", then "completed-symlinks" to reach root.
-        // Actually, 'depth' is exactly the number of parent folders we are in relative to root.
+
+        // 2. Build "Go Up" string using FORWARD SLASH
+        // Rclone treats '\' in symlinks as a special filename char and corrupts it to .
+        // Forward slash is safe and standard for WebDAV.
         for (int i = 0; i < depth; i++)
         {
-            sb.Append(@"..\");
+            sb.Append("../");
         }
 
-        // 3. Append the target path starting from root (.ids/...)
-        // Structure: .ids/p/r/e/f/i/x/GUID
+        // 3. Append the target path (.ids/...) using FORWARD SLASH
         sb.Append(DavItem.IdsFolder.Name); // .ids
         
         foreach (var c in davFile.IdPrefix)
         {
-            sb.Append('\\');
+            sb.Append('/'); // Forward slash
             sb.Append(c);
         }
         
-        sb.Append('\\');
+        sb.Append('/'); // Forward slash
         sb.Append(davFile.Id);
 
         return sb.ToString();
     }
 
-    // Unused but required for compilation compatibility with other parts of the app
-    public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
+    // Unused by this class but required for compilation compatibility with OrganizedSymlinksUtil
+    public static string GetTargetPath(DavItem davFile, string mountDir) 
+    {
+        return "";
+    }
 
     // ==============================================================================
-    // PUBLIC HELPER METHODS RESTORED TO FIX BUILD ERRORS
+    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        // Standard cleanup just in case
-        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
+        var clean = mountDir
+            .Replace('\uF03A', ':')
+            .Replace('\uF05C', '\\')
+            .Replace('\uF02F', '/');
         return clean.TrimEnd('\\', '/').Replace('\\', '/');
     }
 
