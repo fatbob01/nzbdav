@@ -20,21 +20,17 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY: The "Short Path" Junction.
-                // 1. Absolute paths fail (C: -> C).
-                // 2. Backslashes fail (\ -> ).
-                // 3. Relative paths fail when Radarr moves the file.
-                //
-                // FIX: We generate a target like "/ids/a/b/c...".
-                // This requires the user to create a junction on Windows:
-                // mklink /J C:\ids C:\nzbdav\mount\.ids
-                //
-                // This bypasses ALL Rclone corruption because the target string 
-                // contains only safe, standard ASCII characters.
+                // STRATEGY: Calculated Relative Path with FORWARD SLASHES.
+                // 1. Absolute paths fail due to Rclone colon corruption (C: -> C).
+                // 2. Backslashes fail due to Rclone corruption (\ -> ).
+                // 3. We use calculated relative paths ("../") to avoid colons.
+                // 4. We use forward slashes ("/") to avoid backslash corruption.
+                // 5. This path must be valid for the SOURCE location (where Radarr scans it).
                 
-                var target = GetJunctionTargetPath();
+                var target = GetCalculatedRelativePath();
                 
-                Log.Error("[SYMLINK] Generated Junction Target: '{Target}'", target);
+                // Log strictly as error to ensure visibility
+                Log.Error("[SYMLINK] Generated Relative Target: '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -49,13 +45,28 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetJunctionTargetPath()
+    private string GetCalculatedRelativePath()
     {
-        // Use the alias "/ids". 
-        // Rclone passes '/' through. Windows resolves '/' to the drive root 'C:\'.
-        // So "/ids" becomes "C:\ids".
+        // 1. Calculate depth from the file's perspective
+        // Docker Path example: /completed-symlinks/movies/MovieName/file.mkv
+        // Parent Path: /completed-symlinks/movies/MovieName
+        var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
+        
+        // Segments: [completed-symlinks, movies, MovieName] -> Count: 3
+        var segments = parentPath.Trim('/').Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
+        var depth = segments.Length;
+        
         var sb = new StringBuilder();
-        sb.Append("/ids"); 
+
+        // 2. Go Up to Root using standard ".."
+        for (int i = 0; i < depth; i++)
+        {
+            sb.Append("../");
+        }
+
+        // 3. Go Down to .ids
+        // Result: "../../../.ids/p/r/e/GUID"
+        sb.Append(DavItem.IdsFolder.Name); 
         
         foreach (var c in davFile.IdPrefix)
         {
@@ -69,11 +80,11 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return sb.ToString();
     }
 
-    // Unused but required for compilation compatibility
+    // Unused but required for compilation compatibility with OrganizedSymlinksUtil
     public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
 
     // ==============================================================================
-    // HELPER METHODS (Kept to prevent build errors)
+    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
