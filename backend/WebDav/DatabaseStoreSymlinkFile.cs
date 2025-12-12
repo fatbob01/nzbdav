@@ -1,6 +1,3 @@
-        return string.IsNullOrEmpty(path) ? path : path.Replace('\\', '/');
-    }
-}
 using System.Text;
 using System.Linq;
 using NzbWebDAV.Config;
@@ -24,11 +21,12 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             if (_contentBytes == null)
             {
                 // STRATEGY: Use Relative Paths with FORWARD SLASHES.
-                // 1. Relative paths bypass the "Colons in absolute paths" corruption.
-                // 2. Forward slashes bypass the "Backslash encoded as " corruption.
+                // 1. Relative paths bypass the "Colons in absolute paths" corruption (C: -> C).
+                // 2. Forward slashes bypass the "Backslash encoded as " corruption (\ -> ).
                 // Rclone/Windows should resolve "../.ids/..." correctly.
                 var target = GetRelativeTargetPath();
                 
+                // Log strictly as error to ensure visibility
                 Log.Error("[SYMLINK] Relative Target Generated (Forward Slash): '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
@@ -49,7 +47,9 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         // 1. Calculate depth
         // We look at the parent path to decide how many "../" we need to get back to Root.
         var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
-        // Split by '/' since internal paths are stored with forward slashes
+        
+        // Split by '/' since internal paths are stored with forward slashes.
+        // We filter out empty entries to handle root "/" correctly.
         var segments = parentPath.Trim('/').Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
         var depth = segments.Length;
         
@@ -78,17 +78,23 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return sb.ToString();
     }
 
-    // Unused but required for compilation compatibility
-    public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
+    // Unused by this class but required for compilation compatibility with OrganizedSymlinksUtil
+    public static string GetTargetPath(DavItem davFile, string mountDir) 
+    {
+        return "";
+    }
 
     // ==============================================================================
-    // HELPER METHODS (Kept to prevent build errors in other files)
+    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
+        var clean = mountDir
+            .Replace('\uF03A', ':')
+            .Replace('\uF05C', '\\')
+            .Replace('\uF02F', '/');
         return clean.TrimEnd('\\', '/').Replace('\\', '/');
     }
 
