@@ -21,7 +21,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             if (_contentBytes == null)
             {
                 var target = GetTargetPath();
-                // We log this as an ERROR so it shows up regardless of log level settings
+                // Log this as ERROR to guarantee visibility
                 Log.Error("Generated Symlink Target: {Target}", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
@@ -39,8 +39,8 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     private string GetTargetPath()
     {
-        // BYPASS: Ignore the potentially corrupted Config/Env variable entirely.
-        // We hardcode the clean Windows path here.
+        // NUCLEAR FIX: Ignore the Config/Env variable entirely.
+        // We hardcode the clean Windows path here to bypass any potential corruption.
         const string ForceCleanMountDir = @"C:\nzbdav\mount";
         
         return GetTargetPath(davFile, ForceCleanMountDir);
@@ -54,7 +54,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .Append(davFile.Id.ToString());
 
         // Since we are forcing a hardcoded path, we know it is Windows style
-        // and doesn't need complex normalization.
+        // and uses backslashes.
         return JoinWithSeparator(mountDir, '\\', idSegments);
     }
 
@@ -67,5 +67,33 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             builder.Append(segment);
         }
         return builder.ToString();
+    }
+
+    // ==============================================================================
+    // PUBLIC HELPER METHODS RESTORED TO FIX BUILD ERRORS
+    // These are called by OrganizedSymlinksUtil.cs and other parts of the app.
+    // ==============================================================================
+
+    public static string NormalizeMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+
+        // Basic normalization for other parts of the app that still use this
+        var trimmed = mountDir.TrimEnd('\\', '/');
+        return IsWindowsStylePath(trimmed) ? trimmed.Replace('\\', '/') : trimmed;
+    }
+
+    public static string NormalizePathSeparators(string path)
+    {
+        return string.IsNullOrEmpty(path) ? path : path.Replace('\\', '/');
+    }
+
+    private static bool IsWindowsStylePath(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return false;
+
+        return mountDir.StartsWith("\\\\")
+               || mountDir.StartsWith("//")
+               || (mountDir.Length >= 2 && char.IsLetter(mountDir[0]) && mountDir[1] == ':');
     }
 }
