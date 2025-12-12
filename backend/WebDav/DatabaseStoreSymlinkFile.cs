@@ -20,17 +20,18 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY: Calculated Relative Path with FORWARD SLASHES.
-                // 1. Absolute paths fail due to Rclone colon corruption (C: -> C).
-                // 2. Backslashes fail due to Rclone corruption (\ -> ).
-                // 3. We use calculated relative paths ("../") to avoid colons.
-                // 4. We use forward slashes ("/") to avoid backslash corruption.
-                // 5. This path must be valid for the SOURCE location (where Radarr scans it).
+                // STRATEGY: Corrected Relative Path.
+                // 1. Previous logs proved that "../../../" successfully reaches "C:\".
+                // 2. Previous attempt failed because it looked for "C:\.ids".
+                // 3. FIX: We must point to "C:\nzbdav\mount\.ids".
+                // 
+                // RESULT: "../../../nzbdav/mount/.ids/..."
+                // This combines the safety of relative paths (no colons/backslashes to corrupt)
+                // with the accuracy of your specific directory structure.
                 
-                var target = GetCalculatedRelativePath();
+                var target = GetCorrectedRelativePath();
                 
-                // Log strictly as error to ensure visibility
-                Log.Error("[SYMLINK] Generated Relative Target: '{Target}'", target);
+                Log.Error("[SYMLINK] Generated Corrected Relative Target: '{Target}'", target);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -45,11 +46,10 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetCalculatedRelativePath()
+    private string GetCorrectedRelativePath()
     {
         // 1. Calculate depth from the file's perspective
-        // Docker Path example: /completed-symlinks/movies/MovieName/file.mkv
-        // Parent Path: /completed-symlinks/movies/MovieName
+        // Example Source: /completed-symlinks/movies/MovieName/file.mkv
         var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
         
         // Segments: [completed-symlinks, movies, MovieName] -> Count: 3
@@ -58,14 +58,34 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         
         var sb = new StringBuilder();
 
-        // 2. Go Up to Root using standard ".."
+        // 2. Go Up to Root (C:\) using standard ".."
         for (int i = 0; i < depth; i++)
         {
             sb.Append("../");
         }
 
-        // 3. Go Down to .ids
-        // Result: "../../../.ids/p/r/e/GUID"
+        // 3. Inject the Mount Path (nzbdav/mount)
+        // This is the missing piece from the last attempt!
+        // We assume the mount path is "C:\nzbdav\mount", so we need "nzbdav/mount/"
+        var mountDir = configManager.GetRcloneMountDir() ?? "";
+        
+        // Remove Drive Letter (C:) so we are left with "\nzbdav\mount"
+        if (mountDir.Length > 1 && mountDir[1] == ':')
+        {
+            mountDir = mountDir.Substring(2); 
+        }
+        
+        // Normalize to forward slashes and trim
+        mountDir = mountDir.Replace('\\', '/').Trim('/');
+        
+        if (!string.IsNullOrEmpty(mountDir))
+        {
+            sb.Append(mountDir);
+            sb.Append('/');
+        }
+
+        // 4. Append .ids folder and file ID
+        // Final result example: "../../../nzbdav/mount/.ids/p/r/e/GUID"
         sb.Append(DavItem.IdsFolder.Name); 
         
         foreach (var c in davFile.IdPrefix)
@@ -80,11 +100,11 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return sb.ToString();
     }
 
-    // Unused but required for compilation compatibility with OrganizedSymlinksUtil
+    // Unused but required for compilation compatibility
     public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
 
     // ==============================================================================
-    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
+    // HELPER METHODS (Kept to prevent build errors)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
