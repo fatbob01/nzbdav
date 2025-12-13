@@ -1,131 +1,102 @@
-﻿using System.IO;
-using System.Text.RegularExpressions;
-using Microsoft.Extensions.Caching.Memory;
-using NWebDav.Server;
-using NWebDav.Server.Stores;
+using System.Text;
+using System.Linq;
 using NzbWebDAV.Config;
-using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
-using NzbWebDAV.WebDav.Requests;
+using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
-public class DatabaseStoreSymlinkCollection(
-    DavItem davDirectory,
-    DavDatabaseClient dbClient,
-    ConfigManager configManager
-) : BaseStoreReadonlyCollection
+public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManager) : BaseStoreReadonlyItem
 {
-    public override string Name => davDirectory.Name;
-    public override string UniqueKey => davDirectory.Id.ToString();
-    public override DateTime CreatedAt => davDirectory.CreatedAt;
-
-    private Guid TargetId => davDirectory.Id == DavItem.SymlinkFolder.Id ? DavItem.ContentFolder.Id : davDirectory.Id;
-    private DeletedFileManager DeletedFiles => new(davDirectory.Id);
-
-    protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
+    public override string Name => davFile.Name + ".rclonelink";
+    public override string UniqueKey => davFile.Id + ".rclonelink";
+    
+    // Generate content once and cache it
+    private byte[]? _contentBytes;
+    private byte[] ContentBytes 
     {
-        if (DeletedFiles.IsDeleted(request.Name)) return null;
-        var name = Regex.Replace(request.Name, @"\.rclonelink$", "");
-        var child = await dbClient.GetDirectoryChildAsync(TargetId, name, request.CancellationToken);
-        if (child is null) return null;
-        return GetItem(child);
-    }
-
-    protected override async Task<IStoreItem[]> GetAllItemsAsync(CancellationToken cancellationToken)
-    {
-        // if we are a category folder within the /completed-symlinks dir,
-        // then we only want to show children that correspond to Completed History items.
-        var isCategoryFolder = davDirectory.ParentId == DavItem.ContentFolder.Id;
-        var children = isCategoryFolder
-            ? await dbClient.GetCompletedSymlinkCategoryChildren(davDirectory.Name, cancellationToken)
-            : await dbClient.GetDirectoryChildrenAsync(TargetId, cancellationToken);
-
-        return children
-            .Select(GetItem)
-            .Where(x => !DeletedFiles.IsDeleted(x.Name)) // must appear after Select(GetItem) for correct Name.
-            .ToArray();
-    }
-
-    protected override bool SupportsFastMove(SupportsFastMoveRequest request)
-    {
-        return false;
-    }
-
-    protected override Task<DavStatusCode> DeleteItemAsync(DeleteItemRequest request)
-    {
-        if (configManager.IsEnforceReadonlyWebdavEnabled())
-            return Task.FromResult(DavStatusCode.Forbidden);
-
-        // Items cannot be deleted from the '/completed-symlinks' folder.
-        // This path simply mirrors the '/content' folder, except with symlinks.
-        // This allows radarr/sonarr to import the lightweight symlink, instead
-        // of trying to import large-sized media.
-        //
-        // However, when radarr attempts to import the symlink, it does so by moving
-        // it to the media library. But since the symlinks lives in a separate
-        // file-system (rclone-mounted webdav), the operating system will instead
-        // perform a copy-and-delete operation. For the import to succeed, we must
-        // trick the OS into thinking that the "delete" worked.
-        //
-        // The symlink doesn't actually exist anywhere. It takes zero storage and
-        // just gets created in memory, as needed, for webdav requests. The only
-        // thing that exists is the underlying data within the '/content' directory
-        // But in this request, we only want to "delete" the symlink. We don't want
-        // to delete the underlying media within the '/content' directory.
-        //
-        // Instead, we store the filename in a temporary cache (for 30 seconds).
-        // While the filename is in the cache, we will no longer create that
-        // symlink on-the-fly in subsequent webdav requests. It essentially
-        // mimics a deletion even though there was nothing to delete in the first
-        // place, since everything is created on the fly, mirroring the '/content'
-        // directory.
-        //
-        // (204 No Content) is the correct status code to return for a successful
-        // deletion of a file. This status code means the server has successfully
-        // processed the request, and there is no additional content to send in the
-        // response body. (200 OK) is also acceptable, but more appropriate for when
-        // the server also returns a response body with the status of the operation.
-        DeletedFiles.AddDeletedFile(request.Name, TimeSpan.FromSeconds(30));
-        return Task.FromResult(DavStatusCode.NoContent);
-    }
-
-    private IStoreItem GetItem(DavItem davItem)
-    {
-        return davItem.Type switch
+        get 
         {
-            DavItem.ItemType.Directory =>
-                new DatabaseStoreSymlinkCollection(davItem, dbClient, configManager),
-            DavItem.ItemType.NzbFile =>
-                new DatabaseStoreSymlinkFile(davItem, configManager),
-            DavItem.ItemType.RarFile =>
-                new DatabaseStoreSymlinkFile(davItem, configManager),
-            DavItem.ItemType.MultipartFile =>
-                new DatabaseStoreSymlinkFile(davItem, configManager),
-            _ => throw new ArgumentException("Unrecognized directory child type.")
-        };
+            if (_contentBytes == null)
+            {
+                // STRATEGY: Universal Content Mirror (Hybrid).
+                // 
+                // 1. DYNAMIC PATHS (Claude's Logic):
+                //    We calculate the path segments dynamically to handle nested folders 
+                //    (e.g., "movies/Collection/MovieName") correctly.
+                //
+                // 2. ROOT WALKING (Gemini's Logic):
+                //    We use 20x ".." to guarantee we hit the Drive Root (C:\) every time.
+                //    This ensures the link is valid BEFORE and AFTER Radarr moves it.
+                //
+                // REQUIREMENT:
+                //    User must run: mklink /J C:\content C:\nzbdav\mount\content
+                
+                var target = GetUniversalContentPath();
+                
+                Log.Information("[SYMLINK] Generated Hybrid Target: '{Target}'", target);
+                _contentBytes = Encoding.UTF8.GetBytes(target);
+            }
+            return _contentBytes;
+        }
     }
 
-    private class DeletedFileManager(Guid directoryId)
-    {
-        private static readonly MemoryCache DeletedFiles = new(new MemoryCacheOptions());
+    public override long FileSize => ContentBytes.Length;
+    public override DateTime CreatedAt => davFile.CreatedAt;
 
-        public void AddDeletedFile(string filename, TimeSpan? expiry = null)
+    public override Task<Stream> GetReadableStreamAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
+    }
+
+    private string GetUniversalContentPath()
+    {
+        // 1. Get the full internal path
+        // Example: /completed-symlinks/movies/MovieName/file.mkv
+        var fullPath = davFile.Path?.Replace('\\', '/').Trim('/') ?? "";
+        
+        // Split segments: [completed-symlinks, movies, MovieName, file.mkv]
+        var segments = fullPath.Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
+        
+        var sb = new StringBuilder();
+
+        // 2. ROOT WALKING: Go up to the "Ceiling" (Drive Root)
+        // We use 20 levels to force resolution to C:\ regardless of where Radarr moves the file.
+        for (int i = 0; i < 20; i++)
         {
-            using var entry = DeletedFiles.CreateEntry(GetKey(filename));
-            entry.SlidingExpiration = expiry ?? TimeSpan.FromSeconds(30);
-            entry.Value = true;
+            sb.Append("../");
         }
 
-        public bool IsDeleted(string filename)
+        // 3. Point to "content" folder
+        // This relies on the junction "C:\content" -> "C:\nzbdav\mount\content"
+        sb.Append("content");
+        
+        // 4. Reconstruct the dynamic path
+        // We skip index 0 ("completed-symlinks") and append the rest.
+        // This handles any folder depth (movies/Folder/Subfolder/File.mkv)
+        for (int i = 1; i < segments.Length; i++) 
         {
-            return (bool)(DeletedFiles.Get(GetKey(filename)) ?? false);
+            sb.Append('/');
+            sb.Append(segments[i]);
         }
+        
+        return sb.ToString();
+    }
 
-        private string GetKey(string filename)
-        {
-            return $"{directoryId}/{filename}";
-        }
+    // Unused but required for compilation compatibility
+    public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
+
+    // Helper methods
+    public static string NormalizeMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
+        return clean.TrimEnd('\\', '/').Replace('\\', '/');
+    }
+
+    public static string NormalizePathSeparators(string path)
+    {
+        return string.IsNullOrEmpty(path) ? path : path.Replace('\\', '/');
     }
 }
