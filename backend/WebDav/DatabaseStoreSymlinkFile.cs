@@ -20,18 +20,19 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         {
             if (_contentBytes == null)
             {
-                // STRATEGY: Pure Relative Path.
-                // 1. Previous logs confirmed that "../../../" successfully walks up the folder tree
-                //    without triggering Rclone's character corruption (C: -> C).
-                // 2. The previous error showed we landed at "C:\nzbdav\mount" correctly, 
-                //    but then appended "nzbdav\mount" again, causing duplication.
-                // 
-                // FIX: We rely solely on ".." to reach the mount root, then point directly to ".ids".
-                // Result: "../../../.ids/..." -> Resolves to "C:\nzbdav\mount\.ids\..."
+                // STRATEGY: Point to "content" folder.
+                // 1. "completed-symlinks" mirrors the structure of "content".
+                // 2. We simply calculate the relative path to jump over to the parallel "content" folder.
+                // 3. This stays within the Rclone mount, avoiding absolute path/drive letter issues.
+                //
+                // Example: 
+                // Source: /completed-symlinks/movies/Avatar/file.mkv
+                // Target: ../../../content/movies/Avatar/file.mkv
                 
-                var target = GetSimpleRelativePath();
+                var target = GetContentRelativePath();
                 
-                Log.Error("[SYMLINK] Generated Simple Relative Target: '{Target}'", target);
+                // Log the generated target for verification
+                Log.Information("[SYMLINK] Generated Content Target: '{Target}' for file '{Name}'", target, davFile.Name);
                 _contentBytes = Encoding.UTF8.GetBytes(target);
             }
             return _contentBytes;
@@ -46,39 +47,39 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetSimpleRelativePath()
+    private string GetContentRelativePath()
     {
-        // 1. Calculate depth from the file's perspective
-        // Source: /completed-symlinks/movies/MovieName/file.mkv
-        var parentPath = davFile.Parent?.Path ?? System.IO.Path.GetDirectoryName(davFile.Path)?.Replace('\\', '/') ?? "";
+        // 1. Get the full internal path of the current file
+        // Example: /completed-symlinks/movies/MovieName/file.mkv
+        var fullPath = davFile.Path?.Replace('\\', '/').Trim('/') ?? "";
         
-        // Segments: [completed-symlinks, movies, MovieName] -> Count: 3
-        var segments = parentPath.Trim('/').Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
-        var depth = segments.Length;
+        // 2. Split into segments: [completed-symlinks, movies, MovieName, file.mkv]
+        var segments = fullPath.Split('/').Where(s => !string.IsNullOrEmpty(s)).ToArray();
+        
+        // 3. Calculate depth to go back to Mount Root
+        // We subtract 1 because we don't count the filename itself as a directory level
+        var depth = segments.Length - 1; 
         
         var sb = new StringBuilder();
-
-        // 2. Go Up to Mount Root using standard ".."
-        // This lands us at "C:\nzbdav\mount"
+        
+        // 4. Go up to Mount Root
+        // "../../../"
         for (int i = 0; i < depth; i++)
         {
             sb.Append("../");
         }
-
-        // 3. Append .ids folder and file ID
-        // We do NOT inject "nzbdav/mount" here because we are already inside it.
-        // Result: "../../../.ids/p/r/e/GUID"
-        sb.Append(DavItem.IdsFolder.Name); 
         
-        foreach (var c in davFile.IdPrefix)
+        // 5. Descend into "content" folder
+        // We start loop at index 1 to SKIP the first segment ("completed-symlinks")
+        // We effectively replace "completed-symlinks" with "content"
+        sb.Append("content");
+        
+        for (int i = 1; i < segments.Length; i++) 
         {
-            sb.Append('/'); 
-            sb.Append(c);
+            sb.Append('/');
+            sb.Append(segments[i]);
         }
         
-        sb.Append('/'); 
-        sb.Append(davFile.Id);
-
         return sb.ToString();
     }
 
@@ -86,13 +87,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
 
     // ==============================================================================
-    // HELPER METHODS (Kept to prevent build errors)
+    // HELPER METHODS (Kept to prevent build errors in OrganizedSymlinksUtil.cs)
     // ==============================================================================
 
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        var clean = mountDir.Replace('\uF03A', ':').Replace('\uF05C', '\\').Replace('\uF02F', '/');
+        var clean = mountDir
+            .Replace('\uF03A', ':')
+            .Replace('\uF05C', '\\')
+            .Replace('\uF02F', '/');
         return clean.TrimEnd('\\', '/').Replace('\\', '/');
     }
 
