@@ -21,17 +21,9 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             if (_contentBytes == null)
             {
                 // STRATEGY: Universal Content Mirror (Hybrid).
-                // 
-                // 1. DYNAMIC PATHS (Claude's Logic):
-                //    We calculate the path segments dynamically to handle nested folders 
-                //    (e.g., "movies/Collection/MovieName") correctly.
-                //
-                // 2. ROOT WALKING (Gemini's Logic):
-                //    We use 20x ".." to guarantee we hit the Drive Root (C:\) every time.
-                //    This ensures the link is valid BEFORE and AFTER Radarr moves it.
-                //
-                // REQUIREMENT:
-                //    User must run: mklink /J C:\content C:\nzbdav\mount\content
+                // 1. DYNAMIC PATHS: Calculate path segments to handle nested folders.
+                // 2. ROOT WALKING: Use 20x ".." to force resolution to Drive Root (C:\).
+                // 3. TARGET: Point to "content" folder (requires Junction).
                 
                 var target = GetUniversalContentPath();
                 
@@ -53,7 +45,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     private string GetUniversalContentPath()
     {
         // 1. Get the full internal path
-        // Example: /completed-symlinks/movies/MovieName/file.mkv
         var fullPath = davFile.Path?.Replace('\\', '/').Trim('/') ?? "";
         
         // Split segments: [completed-symlinks, movies, MovieName, file.mkv]
@@ -74,7 +65,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         
         // 4. Reconstruct the dynamic path
         // We skip index 0 ("completed-symlinks") and append the rest.
-        // This handles any folder depth (movies/Folder/Subfolder/File.mkv)
         for (int i = 1; i < segments.Length; i++) 
         {
             sb.Append('/');
@@ -84,10 +74,9 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return sb.ToString();
     }
 
-    // Unused but required for compilation compatibility
+    // Helper methods required for compilation
     public static string GetTargetPath(DavItem davFile, string mountDir) => ""; 
 
-    // Helper methods
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
