@@ -53,12 +53,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             }
         }
 
-        if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            pathSegments[0] = DavItem.ContentFolder.Name;
-        }
-
-        var contentPath = string.Join('/', pathSegments);
         var mountRoot = HasDriveLetter(normalizedMountDir)
             ? normalizedMountDir.TrimEnd('/')
             : EnsureLeadingSlash(RemoveDriveLetter(normalizedMountDir).TrimEnd('/'));
@@ -70,6 +64,24 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
                 mountDir);
             throw new InvalidOperationException("Cannot determine mount root for symlink target generation.");
         }
+
+        if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            pathSegments[0] = DavItem.ContentFolder.Name;
+        }
+
+        var mountRootSegments = NormalizePathSeparators(mountRoot)
+            .Trim('/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (pathSegments.Count > 0
+            && pathSegments[0].Equals(DavItem.ContentFolder.Name, StringComparison.OrdinalIgnoreCase)
+            && mountRootSegments.LastOrDefault()?.Equals(DavItem.ContentFolder.Name, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            pathSegments = pathSegments.Skip(1).ToList();
+        }
+
+        var contentPath = string.Join('/', pathSegments);
 
         return string.Join('/', new[] { mountRoot.TrimEnd('/'), contentPath }.Where(x => !string.IsNullOrEmpty(x)));
     }
