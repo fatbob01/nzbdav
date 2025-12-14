@@ -12,20 +12,24 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     public override string UniqueKey => davFile.Id + ".rclonelink";
     public override long FileSize => ContentBytes.Length;
     public override DateTime CreatedAt => davFile.CreatedAt;
-    private byte[] ContentBytes => Encoding.UTF8.GetBytes(GetContentRelativePath());
+    private byte[] ContentBytes => Encoding.UTF8.GetBytes(GetTargetPath());
 
     public override Task<Stream> GetReadableStreamAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetContentRelativePath()
+    private string GetTargetPath()
     {
-        return GetContentRelativePath(davFile);
+        return GetTargetPath(davFile, configManager.GetRcloneMountDir());
     }
 
-    public static string GetContentRelativePath(DavItem davFile)
+    public static string GetTargetPath(DavItem davFile, string mountDir)
     {
+        // mountDir is intentionally unused but preserved for compatibility with
+        // callers that still supply it (e.g. migration tasks)
+        _ = mountDir;
+
         // Normalize the WebDAV path and convert the completed-symlinks prefix
         // to the content prefix so the symlink target mirrors the actual media
         // location beneath the mounted content directory.
