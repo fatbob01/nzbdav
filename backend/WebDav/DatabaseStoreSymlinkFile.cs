@@ -36,6 +36,8 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             throw new InvalidOperationException("The rclone mount directory must be configured to build symlinks.");
         }
 
+        normalizedMountDir = NormalizeMountContentRoot(normalizedMountDir);
+
         // Normalize the WebDAV path and convert the completed-symlinks prefix
         // to the content prefix so the symlink target mirrors the actual media
         // location beneath the mounted content directory.
@@ -133,6 +135,29 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
         // Normalize separators and ensure no trailing slash for clean path joining
         return NormalizePathSeparators(mountDir).TrimEnd('/');
+    }
+
+    private static string NormalizeMountContentRoot(string mountDir)
+    {
+        if (string.IsNullOrWhiteSpace(mountDir))
+        {
+            return mountDir;
+        }
+
+        var hasLeadingSlash = mountDir.StartsWith('/');
+        var mountSegments = NormalizePathSeparators(mountDir)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        if (mountSegments.Count > 0
+            && mountSegments[^1].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            mountSegments[^1] = DavItem.ContentFolder.Name;
+            var rebuilt = string.Join('/', mountSegments);
+            return hasLeadingSlash ? "/" + rebuilt : rebuilt;
+        }
+
+        return mountDir;
     }
 
     public static string RemoveDriveLetter(string path)

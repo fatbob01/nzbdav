@@ -65,4 +65,24 @@ public class DatabaseStoreSymlinkFileTests
 
         Assert.Equal("C:/nzbdav/mount/content/movies/Inception.mkv", target);
     }
+
+    [Fact]
+    public void GetTargetPath_NormalizesSymlinkMountToContent()
+    {
+        var mountDir = "C:/nzbdav/mount/completed-symlinks";
+        var davItem = new DavItem
+        {
+            Id = Guid.NewGuid(),
+            Path = "/completed-symlinks/movies/Inception.mkv",
+            Name = "Inception.mkv",
+            ParentId = DavItem.SymlinkFolder.Id,
+            Type = DavItem.ItemType.NzbFile,
+            IdPrefix = "abcde",
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        var target = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
+
+        Assert.Equal("C:/nzbdav/mount/content/movies/Inception.mkv", target);
+    }
 }
