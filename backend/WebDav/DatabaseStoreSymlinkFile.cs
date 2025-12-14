@@ -28,15 +28,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        var normalizedMountDir = NormalizeMountDir(mountDir);
+        var normalizedMountDir = NormalizeMountContentRoot(NormalizeMountDir(mountDir));
 
         if (string.IsNullOrWhiteSpace(normalizedMountDir))
         {
             Log.Error("Unable to build symlink target because no rclone mount directory is configured.");
             throw new InvalidOperationException("The rclone mount directory must be configured to build symlinks.");
         }
-
-        normalizedMountDir = NormalizeMountContentRoot(normalizedMountDir);
 
         // Normalize the WebDAV path and convert the completed-symlinks prefix
         // to the content prefix so the symlink target mirrors the actual media
