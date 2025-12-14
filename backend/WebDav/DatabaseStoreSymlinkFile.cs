@@ -1,4 +1,5 @@
 using System.Text;
+using System.Linq;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
@@ -11,27 +12,43 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     public override string UniqueKey => davFile.Id + ".rclonelink";
     public override long FileSize => ContentBytes.Length;
     public override DateTime CreatedAt => davFile.CreatedAt;
-    private byte[] ContentBytes => Encoding.UTF8.GetBytes(GetTargetPath());
+    private byte[] ContentBytes => Encoding.UTF8.GetBytes(GetContentRelativePath());
 
     public override Task<Stream> GetReadableStreamAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult<Stream>(new MemoryStream(ContentBytes));
     }
 
-    private string GetTargetPath()
+    private string GetContentRelativePath()
     {
-        return GetTargetPath(davFile, configManager.GetRcloneMountDir());
+        return GetContentRelativePath(davFile);
     }
 
-    public static string GetTargetPath(DavItem davFile, string mountDir)
+    public static string GetContentRelativePath(DavItem davFile)
     {
-        var pathParts = davFile.IdPrefix
-            .Select(x => x.ToString())
-            .Prepend(DavItem.IdsFolder.Name)
-            .Prepend(mountDir)
-            .Append(davFile.Id.ToString())
-            .ToArray();
-        return Path.Join(pathParts);
+        // Normalize the WebDAV path and convert the completed-symlinks prefix
+        // to the content prefix so the symlink target mirrors the actual media
+        // location beneath the mounted content directory.
+        var normalizedPath = NormalizePathSeparators(davFile.Path).Trim('/');
+        var pathSegments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+        if (pathSegments.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            pathSegments[0] = DavItem.ContentFolder.Name;
+        }
+
+        var contentPath = string.Join('/', pathSegments);
+
+        // Walk up to the filesystem root (20 levels is effectively unlimited on
+        // Windows) so that the link resolves correctly whether it is used inside
+        // or outside the rclone mount. Once at the root, append the content path.
+        var rootWalk = string.Concat(Enumerable.Repeat("../", 20));
+        return rootWalk + contentPath;
     }
 
     // --- Added missing methods to fix build errors ---
