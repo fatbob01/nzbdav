@@ -54,9 +54,11 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             }
         }
 
-        var mountRoot = HasDriveLetter(contentAwareMountDir)
-            ? contentAwareMountDir.TrimEnd('/')
-            : EnsureLeadingSlash(RemoveDriveLetter(contentAwareMountDir).TrimEnd('/'));
+        // Always strip the drive letter.
+        // This creates a "Drive-Relative" path (e.g., "/nzbdav/mount/content/...")
+        // which avoids rclone colon corruption AND works after Radarr moves the file
+        // (provided the move stays on the same drive).
+        var mountRoot = EnsureLeadingSlash(RemoveDriveLetter(contentAwareMountDir).TrimEnd('/'));
 
         if (string.IsNullOrWhiteSpace(mountRoot) || mountRoot == "/")
         {
