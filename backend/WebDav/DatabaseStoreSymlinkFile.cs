@@ -121,7 +121,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return NormalizePathSeparators(mountDir).TrimEnd('/');
     }
 
-    private static string RemoveDriveLetter(string path)
+    public static string RemoveDriveLetter(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
 
@@ -133,7 +133,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return path;
     }
 
-    private static string EnsureLeadingSlash(string path)
+    public static string EnsureLeadingSlash(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
         return path.StartsWith('/') ? path : "/" + path;
