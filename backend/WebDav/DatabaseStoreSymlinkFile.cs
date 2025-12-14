@@ -1,4 +1,5 @@
 using System.Text;
+using System.Linq;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
@@ -25,13 +26,33 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        var pathParts = davFile.IdPrefix
-            .Select(x => x.ToString())
-            .Prepend(DavItem.IdsFolder.Name)
-            .Prepend(mountDir)
-            .Append(davFile.Id.ToString())
-            .ToArray();
-        return Path.Join(pathParts);
+        // mountDir is intentionally unused but preserved for compatibility with
+        // callers that still supply it (e.g. migration tasks)
+        _ = mountDir;
+
+        // Normalize the WebDAV path and convert the completed-symlinks prefix
+        // to the content prefix so the symlink target mirrors the actual media
+        // location beneath the mounted content directory.
+        var normalizedPath = NormalizePathSeparators(davFile.Path).Trim('/');
+        var pathSegments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+        if (pathSegments.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            pathSegments[0] = DavItem.ContentFolder.Name;
+        }
+
+        var contentPath = string.Join('/', pathSegments);
+
+        // Walk up to the filesystem root (20 levels is effectively unlimited on
+        // Windows) so that the link resolves correctly whether it is used inside
+        // or outside the rclone mount. Once at the root, append the content path.
+        var rootWalk = string.Concat(Enumerable.Repeat("../", 20));
+        return rootWalk + contentPath;
     }
 
     // --- Added missing methods to fix build errors ---
