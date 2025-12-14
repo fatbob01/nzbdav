@@ -59,7 +59,9 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
 
         var contentPath = string.Join('/', pathSegments);
-        var mountRoot = EnsureLeadingSlash(RemoveDriveLetter(normalizedMountDir).TrimEnd('/'));
+        var mountRoot = HasDriveLetter(normalizedMountDir)
+            ? normalizedMountDir.TrimEnd('/')
+            : EnsureLeadingSlash(RemoveDriveLetter(normalizedMountDir).TrimEnd('/'));
 
         if (string.IsNullOrWhiteSpace(mountRoot) || mountRoot == "/")
         {
@@ -137,5 +139,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(path)) return path;
         return path.StartsWith('/') ? path : "/" + path;
+    }
+
+    private static bool HasDriveLetter(string path)
+    {
+        return !string.IsNullOrEmpty(path)
+               && path.Length >= 2
+               && path[1] == ':'
+               && char.IsLetter(path[0]);
     }
 }
