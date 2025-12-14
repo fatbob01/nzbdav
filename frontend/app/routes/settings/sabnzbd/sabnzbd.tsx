@@ -61,7 +61,7 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
                     value={config["rclone.mount-dir"]}
                     onChange={e => setNewConfig({ ...config, "rclone.mount-dir": e.target.value })} />
                 <Form.Text id="mount-dir-help" muted>
-                    The location at which you've mounted (or will mount) the webdav root, through Rclone. This is used to tell Radarr / Sonarr where to look for completed "downloads." POSIX and Windows paths are supported; for example, a mount dir of `C:\\nzbdav\\mount` produces symlink targets like `C:/nzbdav/mount/.ids/a/b/c/d/e/&lt;id&gt;`.
+                    The location at which you've mounted (or will mount) the webdav root, through Rclone. This is used to tell Radarr / Sonarr where to look for completed "downloads."                
                 </Form.Text>
             </Form.Group>
             <hr />
