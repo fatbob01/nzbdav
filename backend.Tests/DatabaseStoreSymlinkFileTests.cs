@@ -87,6 +87,26 @@ public class DatabaseStoreSymlinkFileTests
     }
 
     [Fact]
+    public void GetTargetPath_NormalizesSymlinkMountBeforeDeterminingRoot()
+    {
+        var mountDir = "C:/nzbdav/mount/completed-symlinks/";
+        var davItem = new DavItem
+        {
+            Id = Guid.NewGuid(),
+            Path = "/content/series/Andor/S01E01.mkv",
+            Name = "S01E01.mkv",
+            ParentId = DavItem.ContentFolder.Id,
+            Type = DavItem.ItemType.NzbFile,
+            IdPrefix = "abcde",
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        var target = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
+
+        Assert.Equal("C:/nzbdav/mount/content/series/Andor/S01E01.mkv", target);
+    }
+
+    [Fact]
     public void GetTargetPath_AnchorsSymlinkMountUnderContentRoot()
     {
         var mountDir = "C:/nzbdav/mount/completed-symlinks";
