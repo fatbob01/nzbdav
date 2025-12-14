@@ -46,12 +46,7 @@ class Program
             .MinimumLevel.Override("Microsoft.AspNetCore.DataProtection", LogEventLevel.Error)
             .WriteTo.Console(theme: AnsiConsoleTheme.Code)
             .CreateLogger();
-        
-        // ADD THIS LINE:
-        Log.Error("===============================================================");
-        Log.Error("   DEPLOYMENT VERIFICATION: BUILD VERSION 0.4.80 (FIXED)       ");
-        Log.Error("===============================================================");
-        
+
         // initialize database
         await using var databaseContext = new DavDatabaseContext();
 
