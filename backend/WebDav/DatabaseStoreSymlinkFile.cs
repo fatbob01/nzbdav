@@ -28,9 +28,10 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        var normalizedMountDir = NormalizeMountContentRoot(NormalizeMountDir(mountDir));
+        var normalizedMountDir = NormalizeMountDir(mountDir);
+        var contentAwareMountDir = NormalizeMountContentRoot(normalizedMountDir);
 
-        if (string.IsNullOrWhiteSpace(normalizedMountDir))
+        if (string.IsNullOrWhiteSpace(contentAwareMountDir))
         {
             Log.Error("Unable to build symlink target because no rclone mount directory is configured.");
             throw new InvalidOperationException("The rclone mount directory must be configured to build symlinks.");
@@ -53,9 +54,9 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             }
         }
 
-        var mountRoot = HasDriveLetter(normalizedMountDir)
-            ? normalizedMountDir.TrimEnd('/')
-            : EnsureLeadingSlash(RemoveDriveLetter(normalizedMountDir).TrimEnd('/'));
+        var mountRoot = HasDriveLetter(contentAwareMountDir)
+            ? contentAwareMountDir.TrimEnd('/')
+            : EnsureLeadingSlash(RemoveDriveLetter(contentAwareMountDir).TrimEnd('/'));
 
         if (string.IsNullOrWhiteSpace(mountRoot) || mountRoot == "/")
         {
@@ -70,7 +71,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             pathSegments[0] = DavItem.ContentFolder.Name;
         }
 
-        var mountRootSegments = NormalizePathSeparators(mountRoot)
+        var mountRootSegments = NormalizePathSeparators(contentAwareMountDir)
             .Trim('/')
             .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
