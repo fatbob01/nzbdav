@@ -1,8 +1,10 @@
 using System.Text;
 using System.Linq;
+using System.Collections.Generic;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
+using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
@@ -38,7 +40,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
         if (pathSegments.Count == 0)
         {
-            return string.Empty;
+            pathSegments = BuildFallbackPathSegments(davFile);
+
+            if (pathSegments.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to build symlink target path for `{davFile.Id}` with original path `{davFile.Path}`.");
+            }
         }
 
         if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
@@ -62,6 +70,39 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         if (string.IsNullOrEmpty(path)) return path;
         // Rclone and WebDAV typically prefer forward slashes
         return path.Replace('\\', '/');
+    }
+
+    private static List<string> BuildFallbackPathSegments(DavItem davFile)
+    {
+        Log.Warning(
+            "Attempted to build symlink target for item with empty path. Path `{Path}`, Id `{Id}`, ParentId `{ParentId}`.",
+            davFile.Path,
+            davFile.Id,
+            davFile.ParentId);
+
+        var segments = new List<string>();
+
+        if (davFile.ParentId == DavItem.SymlinkFolder.Id || davFile.ParentId == DavItem.ContentFolder.Id)
+        {
+            segments.Add(DavItem.ContentFolder.Name);
+        }
+        else if (davFile.ParentId == DavItem.Root.Id || davFile.ParentId is null)
+        {
+            // No additional prefix required.
+        }
+        else
+        {
+            Log.Warning(
+                "Fallback symlink reconstruction cannot determine parent path for ParentId `{ParentId}`; using filename only.",
+                davFile.ParentId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(davFile.Name))
+        {
+            segments.Add(davFile.Name);
+        }
+
+        return segments;
     }
 
     public static string NormalizeMountDir(string mountDir)
