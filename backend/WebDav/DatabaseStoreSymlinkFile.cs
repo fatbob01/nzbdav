@@ -33,4 +33,20 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .ToArray();
         return Path.Join(pathParts);
     }
-} // <--- This was missing
+
+    // --- Added missing methods to fix build errors ---
+
+    public static string NormalizePathSeparators(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        // Rclone and WebDAV typically prefer forward slashes
+        return path.Replace('\\', '/');
+    }
+
+    public static string NormalizeMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+        // Normalize separators and ensure no trailing slash for clean path joining
+        return NormalizePathSeparators(mountDir).TrimEnd('/');
+    }
+}
