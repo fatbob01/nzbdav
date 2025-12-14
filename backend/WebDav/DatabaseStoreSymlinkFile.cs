@@ -28,9 +28,13 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        // mountDir is intentionally unused but preserved for compatibility with
-        // callers that still supply it (e.g. migration tasks)
-        _ = mountDir;
+        var normalizedMountDir = NormalizeMountDir(mountDir);
+
+        if (string.IsNullOrWhiteSpace(normalizedMountDir))
+        {
+            Log.Error("Unable to build symlink target because no rclone mount directory is configured.");
+            throw new InvalidOperationException("The rclone mount directory must be configured to build symlinks.");
+        }
 
         // Normalize the WebDAV path and convert the completed-symlinks prefix
         // to the content prefix so the symlink target mirrors the actual media
@@ -55,12 +59,17 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
 
         var contentPath = string.Join('/', pathSegments);
+        var mountRoot = EnsureLeadingSlash(RemoveDriveLetter(normalizedMountDir).TrimEnd('/'));
 
-        // Walk up to the filesystem root (20 levels is effectively unlimited on
-        // Windows) so that the link resolves correctly whether it is used inside
-        // or outside the rclone mount. Once at the root, append the content path.
-        var rootWalk = string.Concat(Enumerable.Repeat("../", 20));
-        return rootWalk + contentPath;
+        if (string.IsNullOrWhiteSpace(mountRoot) || mountRoot == "/")
+        {
+            Log.Error(
+                "Unable to build symlink target because the rclone mount directory `{MountDir}` cannot be converted into a mount root.",
+                mountDir);
+            throw new InvalidOperationException("Cannot determine mount root for symlink target generation.");
+        }
+
+        return string.Join('/', new[] { mountRoot.TrimEnd('/'), contentPath }.Where(x => !string.IsNullOrEmpty(x)));
     }
 
     // --- Added missing methods to fix build errors ---
@@ -110,5 +119,23 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
         // Normalize separators and ensure no trailing slash for clean path joining
         return NormalizePathSeparators(mountDir).TrimEnd('/');
+    }
+
+    private static string RemoveDriveLetter(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+
+        if (path.Length >= 2 && path[1] == ':' && char.IsLetter(path[0]))
+        {
+            return path[2..];
+        }
+
+        return path;
+    }
+
+    private static string EnsureLeadingSlash(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        return path.StartsWith('/') ? path : "/" + path;
     }
 }
