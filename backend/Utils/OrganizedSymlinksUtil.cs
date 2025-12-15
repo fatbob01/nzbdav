@@ -21,7 +21,7 @@ public static partial class OrganizedSymlinksUtil
             return null;
         }
 
-        category ??= item.Category;
+        category ??= GetCategoryFromPath(item.Path);
 
         if (string.IsNullOrWhiteSpace(category))
         {
@@ -36,6 +36,25 @@ public static partial class OrganizedSymlinksUtil
         var cleanedName = CleanItemName(item.Name);
 
         return $"/{DavItem.SymlinkFolder.Name}/{category}/{cleanedName}/{item.Name}";
+    }
+
+    /// <summary>
+    /// Get symlink (used by HealthCheckService)
+    /// </summary>
+    public static string? GetSymlink(DavItem item, string? category = null)
+    {
+        return GetOrganizedSymlinkPath(item, category);
+    }
+
+    private static string? GetCategoryFromPath(string path)
+    {
+        // Extract category from path like /content/movies/... or /completed-symlinks/tv/...
+        var segments = path?.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments != null && segments.Length >= 2)
+        {
+            return segments[1]; // Return "movies" or "tv"
+        }
+        return null;
     }
 
     /// <summary>
