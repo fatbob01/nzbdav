@@ -20,7 +20,6 @@ public class MigrateLibrarySymlinksTask(
         {
             // read config
             var mountDir = configManager.GetRcloneMountDir();
-            var normalizedMountDir = DatabaseStoreSymlinkFile.NormalizeMountDir(mountDir);
             var libraryDir = configManager.GetLibraryDir();
             if (libraryDir is null)
                 throw new InvalidOperationException("The library directory must first be configured.");
@@ -38,12 +37,11 @@ public class MigrateLibrarySymlinksTask(
                 var fileInfo = new FileInfo(file);
                 var isOldSymlink = fileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint)
                                    && fileInfo.LinkTarget is not null
-                                   && DatabaseStoreSymlinkFile.NormalizePathSeparators(fileInfo.LinkTarget!)
-                                       .StartsWith(DatabaseStoreSymlinkFile.NormalizePathSeparators(
-                                           Path.Combine(mountDir, DavItem.ContentFolder.Name)));
+                                   && fileInfo.LinkTarget!.StartsWith(
+                                       Path.Combine(mountDir, DavItem.ContentFolder.Name));
                 if (isOldSymlink)
                 {
-                    await UpdateSymlink(fileInfo, normalizedMountDir);
+                    await UpdateSymlink(fileInfo, mountDir);
                     retargetted++;
                 }
 
@@ -65,8 +63,7 @@ public class MigrateLibrarySymlinksTask(
 
     private async Task UpdateSymlink(FileInfo oldSymlink, string mountDir)
     {
-        var normalizedTarget = DatabaseStoreSymlinkFile.NormalizePathSeparators(oldSymlink.LinkTarget!);
-        var davPath = normalizedTarget.RemovePrefix(mountDir).RemovePrefix("/");
+        var davPath = oldSymlink.LinkTarget!.RemovePrefix(mountDir).RemovePrefix("/");
         var storeItem = await store.GetItemAsync(davPath, default);
         var davItem = storeItem switch
         {
