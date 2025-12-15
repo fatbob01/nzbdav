@@ -1,10 +1,7 @@
 using System.Text;
-using System.Linq;
-using System.Collections.Generic;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.WebDav.Base;
-using Serilog;
 
 namespace NzbWebDAV.WebDav;
 
@@ -28,162 +25,49 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        var normalizedMountDir = NormalizeMountDir(mountDir);
-        var contentAwareMountDir = NormalizeMountContentRoot(normalizedMountDir);
-
-        if (string.IsNullOrWhiteSpace(contentAwareMountDir))
-        {
-            Log.Error("Unable to build symlink target because no rclone mount directory is configured.");
-            throw new InvalidOperationException("The rclone mount directory must be configured to build symlinks.");
-        }
-
-        // Normalize the WebDAV path and convert the completed-symlinks prefix
-        // to the content prefix so the symlink target mirrors the actual media
-        // location beneath the mounted content directory.
-        var normalizedPath = NormalizePathSeparators(davFile.Path).Trim('/');
-        var pathSegments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-        if (pathSegments.Count == 0)
-        {
-            pathSegments = BuildFallbackPathSegments(davFile);
-
-            if (pathSegments.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    $"Unable to build symlink target path for `{davFile.Id}` with original path `{davFile.Path}`.");
-            }
-        }
-
-        // Always strip the drive letter.
-        // This creates a "Drive-Relative" path (e.g., "/nzbdav/mount/content/...")
-        // which avoids rclone colon corruption AND works after Radarr moves the file
-        // (provided the move stays on the same drive).
-        var mountRoot = EnsureLeadingSlash(RemoveDriveLetter(contentAwareMountDir).TrimEnd('/'));
-
-        if (string.IsNullOrWhiteSpace(mountRoot) || mountRoot == "/")
-        {
-            Log.Error(
-                "Unable to build symlink target because the rclone mount directory `{MountDir}` cannot be converted into a mount root.",
-                mountDir);
-            throw new InvalidOperationException("Cannot determine mount root for symlink target generation.");
-        }
-
-        if (pathSegments[0].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            pathSegments[0] = DavItem.ContentFolder.Name;
-        }
-
-        var mountRootSegments = NormalizePathSeparators(contentAwareMountDir)
-            .Trim('/')
-            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        if (pathSegments.Count > 0
-            && pathSegments[0].Equals(DavItem.ContentFolder.Name, StringComparison.OrdinalIgnoreCase)
-            && mountRootSegments.LastOrDefault()?.Equals(DavItem.ContentFolder.Name, StringComparison.OrdinalIgnoreCase) == true)
-        {
-            pathSegments = pathSegments.Skip(1).ToList();
-        }
-
-        var contentPath = string.Join('/', pathSegments);
-
-        return string.Join('/', new[] { mountRoot.TrimEnd('/'), contentPath }.Where(x => !string.IsNullOrEmpty(x)));
+        // Strip drive letter and ensure leading slash for drive-relative path
+        var normalizedMount = RemoveDriveLetter(NormalizeMountDir(mountDir));
+        
+        // Build path: /nzbdav/mount/.ids/7/d/9/e/b/guid
+        var pathParts = davFile.IdPrefix
+            .Select(x => x.ToString())
+            .Prepend(DavItem.IdsFolder.Name)
+            .Prepend(normalizedMount)
+            .Append(davFile.Id.ToString())
+            .ToArray();
+        
+        // Ensure it starts with / for drive-relative absolute path
+        return EnsureLeadingSlash(string.Join('/', pathParts));
     }
-
-    // --- Added missing methods to fix build errors ---
-
-    public static string NormalizePathSeparators(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return path;
-        // Rclone and WebDAV typically prefer forward slashes
-        return path.Replace('\\', '/');
-    }
-
-    private static List<string> BuildFallbackPathSegments(DavItem davFile)
-    {
-        Log.Warning(
-            "Attempted to build symlink target for item with empty path. Path `{Path}`, Id `{Id}`, ParentId `{ParentId}`.",
-            davFile.Path,
-            davFile.Id,
-            davFile.ParentId);
-
-        var segments = new List<string>();
-
-        if (davFile.ParentId == DavItem.SymlinkFolder.Id || davFile.ParentId == DavItem.ContentFolder.Id)
-        {
-            segments.Add(DavItem.ContentFolder.Name);
-        }
-        else if (davFile.ParentId == DavItem.Root.Id || davFile.ParentId is null)
-        {
-            // No additional prefix required.
-        }
-        else
-        {
-            Log.Warning(
-                "Fallback symlink reconstruction cannot determine parent path for ParentId `{ParentId}`; using filename only.",
-                davFile.ParentId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(davFile.Name))
-        {
-            segments.Add(davFile.Name);
-        }
-
-        return segments;
-    }
-
+    
     public static string NormalizeMountDir(string mountDir)
     {
         if (string.IsNullOrEmpty(mountDir)) return mountDir;
-        // Normalize separators and ensure no trailing slash for clean path joining
         return NormalizePathSeparators(mountDir).TrimEnd('/');
     }
-
-    private static string NormalizeMountContentRoot(string mountDir)
+    
+    public static string NormalizePathSeparators(string path)
     {
-        if (string.IsNullOrWhiteSpace(mountDir))
-        {
-            return mountDir;
-        }
-
-        var hasLeadingSlash = mountDir.StartsWith('/');
-        var mountSegments = NormalizePathSeparators(mountDir)
-            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-
-        if (mountSegments.Count > 0
-            && mountSegments[^1].Equals(DavItem.SymlinkFolder.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            mountSegments[^1] = DavItem.ContentFolder.Name;
-            var rebuilt = string.Join('/', mountSegments);
-            return hasLeadingSlash ? "/" + rebuilt : rebuilt;
-        }
-
-        return mountDir;
+        if (string.IsNullOrEmpty(path)) return path;
+        return path.Replace('\\', '/');
     }
-
+    
     public static string RemoveDriveLetter(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
-
-        if (path.Length >= 2 && path[1] == ':' && char.IsLetter(path[0]))
+        
+        // Remove C: or C:/ or C:\ from the start
+        if (path.Length >= 2 && path[1] == ':')
         {
-            return path[2..];
+            return path.Substring(2).TrimStart('/', '\\');
         }
-
+        
         return path;
     }
-
+    
     public static string EnsureLeadingSlash(string path)
     {
-        if (string.IsNullOrEmpty(path)) return path;
+        if (string.IsNullOrEmpty(path)) return "/";
         return path.StartsWith('/') ? path : "/" + path;
-    }
-
-    private static bool HasDriveLetter(string path)
-    {
-        return !string.IsNullOrEmpty(path)
-               && path.Length >= 2
-               && path[1] == ':'
-               && char.IsLetter(path[0]);
     }
 }
