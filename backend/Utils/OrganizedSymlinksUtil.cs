@@ -1,155 +1,94 @@
-using System.Text.RegularExpressions;
+﻿using NzbWebDAV.Config;
 using NzbWebDAV.Database.Models;
-using NzbWebDAV.WebDav;
-using Serilog;
+using NzbWebDAV.Extensions;
 
 namespace NzbWebDAV.Utils;
 
-public static partial class OrganizedSymlinksUtil
+public static class OrganizedSymlinksUtil
 {
+    private static readonly Dictionary<Guid, string> Cache = new();
+
     /// <summary>
-    /// Generate a path for an organized symlink
+    /// Searches organized media library for a symlink pointing to the given target
     /// </summary>
-    public static string? GetOrganizedSymlinkPath(DavItem item, string? category = null)
+    /// <param name="targetDavItem">The given target</param>
+    /// <param name="configManager">The application config</param>
+    /// <returns>The path to a symlink in the organized media library that points to the given target.</returns>
+    public static string? GetSymlink(DavItem targetDavItem, ConfigManager configManager)
     {
-        if (string.IsNullOrWhiteSpace(item.Name))
-        {
-            Log.Warning(
-                "Attempted to create an organized symlink for item with an empty name. Id `{Id}`, ParentId `{ParentId}`.",
-                item.Id,
-                item.ParentId);
-            return null;
-        }
-
-        category ??= GetCategoryFromPath(item.Path);
-
-        if (string.IsNullOrWhiteSpace(category))
-        {
-            Log.Warning(
-                "Attempted to create an organized symlink for item without a category. Name `{Name}`, Id `{Id}`, ParentId `{ParentId}`.",
-                item.Name,
-                item.Id,
-                item.ParentId);
-            return null;
-        }
-
-        var cleanedName = CleanItemName(item.Name);
-
-        return $"/{DavItem.SymlinkFolder.Name}/{category}/{cleanedName}/{item.Name}";
+        return !TryGetSymlinkFromCache(targetDavItem, configManager, out var symlinkFromCache)
+            ? SearchForSymlink(targetDavItem, configManager)
+            : symlinkFromCache;
     }
 
     /// <summary>
-    /// Get symlink (used by HealthCheckService)
+    /// Enumerates all symlinks within the organized media library that point to nzbdav dav-items.
     /// </summary>
-    public static string? GetSymlink(DavItem item, object? categoryOrConfig = null)
+    /// <param name="configManager">The application config</param>
+    /// <returns>All symlinks within the organized media library that point to nzbdav dav-items.</returns>
+    public static IEnumerable<DavItemSymlink> GetLibrarySymlinkTargets(ConfigManager configManager)
     {
-        // Handle both string category and ConfigManager being passed
-        string? category = null;
-        
-        if (categoryOrConfig is string cat)
+        var libraryRoot = configManager.GetLibraryDir()!;
+        var allSymlinks = SymlinkUtil.GetAllSymlinks(libraryRoot);
+        return GetDavItemSymlinks(allSymlinks, configManager);
+    }
+
+    private static bool TryGetSymlinkFromCache
+    (
+        DavItem targetDavItem,
+        ConfigManager configManager,
+        out string? symlink
+    )
+    {
+        return Cache.TryGetValue(targetDavItem.Id, out symlink)
+               && Verify(symlink, targetDavItem, configManager);
+    }
+
+    private static bool Verify(string symlink, DavItem targetDavItem, ConfigManager configManager)
+    {
+        var fileInfo = new FileInfo(symlink);
+        var symlinkInfo = new SymlinkUtil.SymlinkInfo()
         {
-            category = cat;
-        }
-        else if (categoryOrConfig != null)
+            SymlinkPath = symlink,
+            TargetPath = fileInfo.LinkTarget ?? "",
+        };
+        return GetDavItemSymlinks([symlinkInfo], configManager)
+            .Select(x => x.DavItemId)
+            .FirstOrDefault() == targetDavItem.Id;
+    }
+
+    private static string? SearchForSymlink(DavItem targetDavItem, ConfigManager configManager)
+    {
+        string? result = null;
+        foreach (var symlink in GetLibrarySymlinkTargets(configManager))
         {
-            // ConfigManager was passed, extract category from item path instead
-            category = GetCategoryFromPath(item.Path);
-        }
-        
-        return GetOrganizedSymlinkPath(item, category);
-    }
-
-    /// <summary>
-    /// Get library symlink targets (used by RemoveUnlinkedFilesTask)
-    /// </summary>
-    public static IEnumerable<(Guid DavItemId, string Target)> GetLibrarySymlinkTargets(object configManager)
-    {
-        // RemoveUnlinkedFilesTask calls this to get all symlink targets for cleanup
-        // Since we don't have access to the database here, return empty
-        // The task will handle cleanup differently
-        return Enumerable.Empty<(Guid, string)>();
-    }
-
-    private static string? GetCategoryFromPath(string path)
-    {
-        // Extract category from path like /content/movies/... or /completed-symlinks/tv/...
-        var segments = path?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments != null && segments.Length >= 2)
-        {
-            return segments[1]; // Return "movies" or "tv"
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Cleans an item name by removing common patterns like quality tags, release groups, etc.
-    /// </summary>
-    private static string CleanItemName(string name)
-    {
-        // Remove file extension
-        var nameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(name);
-
-        // Remove common patterns
-        var cleaned = RemoveQualityTags().Replace(nameWithoutExtension, "");
-        cleaned = RemoveReleaseInfo().Replace(cleaned, "");
-        cleaned = RemoveExtraSpaces().Replace(cleaned, " ");
-
-        return cleaned.Trim();
-    }
-
-    [GeneratedRegex(@"\b(480p|576p|720p|1080p|2160p|4K|8K)\b", RegexOptions.IgnoreCase)]
-    private static partial Regex RemoveQualityTags();
-
-    [GeneratedRegex(@"\b(WEB-?DL|WEBRip|BluRay|BDRip|DVDRip|HDTV|x264|x265|HEVC|AAC|AC3|DTS)\b",
-        RegexOptions.IgnoreCase)]
-    private static partial Regex RemoveReleaseInfo();
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex RemoveExtraSpaces();
-
-    public static string ResolveSymlinkTargetForItem(DavItem item, string mountDir)
-    {
-        var contentAwareMountDir = EnsureContentAwareMountDir(mountDir);
-        return ResolveSymlinkTarget(item, contentAwareMountDir);
-    }
-
-    private static string ResolveSymlinkTarget(DavItem item, string contentAwareMountDir)
-    {
-        var normalizedPath = DatabaseStoreSymlinkFile.NormalizePathSeparators(item.Path).Trim('/');
-        var segments = normalizedPath.Split('/');
-        
-        // Replace "completed-symlinks" with "content"
-        if (segments.Length > 0 && segments[0].Equals("completed-symlinks", StringComparison.OrdinalIgnoreCase))
-        {
-            segments[0] = "content";
-        }
-        
-        var contentPath = string.Join('/', segments);
-        var mountRoot = DatabaseStoreSymlinkFile.NormalizeMountDir(contentAwareMountDir);
-        
-        return $"{mountRoot}/{contentPath}";
-    }
-
-    private static string EnsureContentAwareMountDir(string mountDir)
-    {
-        var normalizedMountDir = DatabaseStoreSymlinkFile.NormalizeMountDir(mountDir);
-        var normalizedContentPath = DatabaseStoreSymlinkFile.NormalizePathSeparators(DavItem.ContentFolder.Path);
-
-        if (normalizedMountDir.EndsWith(normalizedContentPath))
-        {
-            return normalizedMountDir;
+            Cache[targetDavItem.Id] = symlink.SymlinkPath;
+            if (symlink.DavItemId == targetDavItem.Id)
+                result = symlink.SymlinkPath;
         }
 
-        return $"{normalizedMountDir.TrimEnd('/')}/{normalizedContentPath.TrimStart('/')}";
+        return result;
     }
 
-    private static bool HasDriveLetter(string path)
+    private static IEnumerable<DavItemSymlink> GetDavItemSymlinks
+    (
+        IEnumerable<SymlinkUtil.SymlinkInfo> symlinkInfos,
+        ConfigManager configManager
+    )
     {
-        if (string.IsNullOrEmpty(path) || path.Length < 2)
-        {
-            return false;
-        }
+        var mountDir = configManager.GetRcloneMountDir();
+        return symlinkInfos
+            .Where(x => x.TargetPath.StartsWith(mountDir))
+            .Select(x => x with { TargetPath = x.TargetPath.RemovePrefix(mountDir) })
+            .Select(x => x with { TargetPath = x.TargetPath.StartsWith('/') ? x.TargetPath : $"/{x.TargetPath}" })
+            .Where(x => x.TargetPath.StartsWith("/.ids"))
+            .Select(x => x with { TargetPath = Path.GetFileNameWithoutExtension(x.TargetPath) })
+            .Select(x => new DavItemSymlink() { SymlinkPath = x.SymlinkPath, DavItemId = Guid.Parse(x.TargetPath) });
+    }
 
-        return path[1] == ':' && char.IsLetter(path[0]);
+    public struct DavItemSymlink
+    {
+        public string SymlinkPath;
+        public Guid DavItemId;
     }
 }
