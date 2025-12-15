@@ -41,23 +41,45 @@ public static partial class OrganizedSymlinksUtil
     /// <summary>
     /// Get symlink (used by HealthCheckService)
     /// </summary>
-public static string? GetSymlink(DavItem item, object? categoryOrConfig = null)
-{
-    // Handle both string category and ConfigManager being passed
-    string? category = null;
-    
-    if (categoryOrConfig is string cat)
+    public static string? GetSymlink(DavItem item, object? categoryOrConfig = null)
     {
-        category = cat;
+        // Handle both string category and ConfigManager being passed
+        string? category = null;
+        
+        if (categoryOrConfig is string cat)
+        {
+            category = cat;
+        }
+        else if (categoryOrConfig != null)
+        {
+            // ConfigManager was passed, extract category from item path instead
+            category = GetCategoryFromPath(item.Path);
+        }
+        
+        return GetOrganizedSymlinkPath(item, category);
     }
-    else if (categoryOrConfig != null)
+
+    /// <summary>
+    /// Get library symlink targets (used by RemoveUnlinkedFilesTask)
+    /// </summary>
+    public static IEnumerable<string> GetLibrarySymlinkTargets(DavItem item, string mountDir)
     {
-        // ConfigManager was passed, extract category from item path instead
-        category = GetCategoryFromPath(item.Path);
+        // Generate all possible symlink targets for this item
+        var targets = new List<string>();
+        
+        // Main organized symlink target
+        var organizedPath = GetOrganizedSymlinkPath(item);
+        if (!string.IsNullOrEmpty(organizedPath))
+        {
+            var target = ResolveSymlinkTargetForItem(item, mountDir);
+            if (!string.IsNullOrEmpty(target))
+            {
+                targets.Add(target);
+            }
+        }
+        
+        return targets;
     }
-    
-    return GetOrganizedSymlinkPath(item, category);
-}
 
     private static string? GetCategoryFromPath(string path)
     {
