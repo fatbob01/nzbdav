@@ -26,7 +26,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
         // Strip drive letter and ensure leading slash for drive-relative path
-        var normalizedMount = RemoveDriveLetter(mountDir?.Replace('\\', '/') ?? "").TrimStart('/');
+        var normalizedMount = RemoveDriveLetter(NormalizeMountDir(mountDir));
         
         // Build path: /nzbdav/mount/.ids/7/d/9/e/b/guid
         var pathParts = davFile.IdPrefix
@@ -38,6 +38,18 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         
         // Ensure it starts with / for drive-relative absolute path
         return "/" + string.Join('/', pathParts);
+    }
+    
+    public static string NormalizeMountDir(string mountDir)
+    {
+        if (string.IsNullOrEmpty(mountDir)) return mountDir;
+        return NormalizePathSeparators(mountDir).TrimEnd('/');
+    }
+    
+    public static string NormalizePathSeparators(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        return path.Replace('\\', '/');
     }
     
     private static string RemoveDriveLetter(string path)
