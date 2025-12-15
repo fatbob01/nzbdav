@@ -37,7 +37,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
             .ToArray();
         
         // Ensure it starts with / for drive-relative absolute path
-        return "/" + string.Join('/', pathParts);
+        return EnsureLeadingSlash(string.Join('/', pathParts));
     }
     
     public static string NormalizeMountDir(string mountDir)
@@ -52,7 +52,7 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         return path.Replace('\\', '/');
     }
     
-    private static string RemoveDriveLetter(string path)
+    public static string RemoveDriveLetter(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
         
@@ -63,5 +63,11 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
         }
         
         return path;
+    }
+    
+    public static string EnsureLeadingSlash(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return "/";
+        return path.StartsWith('/') ? path : "/" + path;
     }
 }
