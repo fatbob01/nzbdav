@@ -25,19 +25,16 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
 
     public static string GetTargetPath(DavItem davFile, string mountDir)
     {
-        // Strip drive letter and ensure leading slash for drive-relative path
-        var normalizedMount = RemoveDriveLetter(NormalizeMountDir(mountDir));
-        
-        // Build path: /nzbdav/mount/.ids/7/d/9/e/b/guid
+        // Use the full mount path including drive letter for Windows symlinks
+        // (Windows NTFS symlinks handle colons fine, unlike rclone text links)
         var pathParts = davFile.IdPrefix
             .Select(x => x.ToString())
             .Prepend(DavItem.IdsFolder.Name)
-            .Prepend(normalizedMount)
+            .Prepend(NormalizeMountDir(mountDir))
             .Append(davFile.Id.ToString())
             .ToArray();
         
-        // Ensure it starts with / for drive-relative absolute path
-        return EnsureLeadingSlash(string.Join('/', pathParts));
+        return string.Join('/', pathParts);
     }
     
     public static string NormalizeMountDir(string mountDir)
@@ -56,7 +53,6 @@ public class DatabaseStoreSymlinkFile(DavItem davFile, ConfigManager configManag
     {
         if (string.IsNullOrEmpty(path)) return path;
         
-        // Remove C: or C:/ or C:\ from the start
         if (path.Length >= 2 && path[1] == ':')
         {
             return path.Substring(2).TrimStart('/', '\\');
