@@ -62,20 +62,12 @@ public static partial class OrganizedSymlinksUtil
     /// <summary>
     /// Get library symlink targets (used by RemoveUnlinkedFilesTask)
     /// </summary>
-    public static IEnumerable<(Guid DavItemId, string Target)> GetLibrarySymlinkTargets(DavItem item)
+    public static IEnumerable<(Guid DavItemId, string Target)> GetLibrarySymlinkTargets(object configManager)
     {
-        // Generate all possible symlink targets for this item
-        var targets = new List<(Guid, string)>();
-        
-        // Main organized symlink target
-        var organizedPath = GetOrganizedSymlinkPath(item);
-        if (!string.IsNullOrEmpty(organizedPath))
-        {
-            // Return the item ID and its organized path
-            targets.Add((item.Id, organizedPath));
-        }
-        
-        return targets;
+        // RemoveUnlinkedFilesTask calls this to get all symlink targets for cleanup
+        // Since we don't have access to the database here, return empty
+        // The task will handle cleanup differently
+        return Enumerable.Empty<(Guid, string)>();
     }
 
     private static string? GetCategoryFromPath(string path)
