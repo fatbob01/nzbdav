@@ -41,10 +41,23 @@ public static partial class OrganizedSymlinksUtil
     /// <summary>
     /// Get symlink (used by HealthCheckService)
     /// </summary>
-    public static string? GetSymlink(DavItem item, string? category = null)
+public static string? GetSymlink(DavItem item, object? categoryOrConfig = null)
+{
+    // Handle both string category and ConfigManager being passed
+    string? category = null;
+    
+    if (categoryOrConfig is string cat)
     {
-        return GetOrganizedSymlinkPath(item, category);
+        category = cat;
     }
+    else if (categoryOrConfig != null)
+    {
+        // ConfigManager was passed, extract category from item path instead
+        category = GetCategoryFromPath(item.Path);
+    }
+    
+    return GetOrganizedSymlinkPath(item, category);
+}
 
     private static string? GetCategoryFromPath(string path)
     {
