@@ -14,7 +14,7 @@ public class AddUrlRequest() : AddFileRequest
     public static async Task<AddUrlRequest> New(HttpContext context, ConfigManager configManager)
     {
         var nzbUrl = context.GetQueryParam("name");
-        var nzbFile = await GetNzbFile(nzbUrl);
+        var nzbFile = await GetNzbFile(nzbUrl, configManager);
         return new AddUrlRequest()
         {
             FileName = nzbFile.FileName,
@@ -27,7 +27,7 @@ public class AddUrlRequest() : AddFileRequest
         };
     }
 
-    private static async Task<NzbFileResponse> GetNzbFile(string? url)
+    private static async Task<NzbFileResponse> GetNzbFile(string? url, ConfigManager configManager)
     {
         try
         {
@@ -36,8 +36,7 @@ public class AddUrlRequest() : AddFileRequest
                 throw new Exception($"The url is invalid.");
 
             // fetch url
-            var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("User-Agent", UserAgentHeader);
+            using var httpClient = GetHttpClient(configManager.GetNzbGrabUserAgent());
             var response = await httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode)
                 throw new Exception($"Received status code {response.StatusCode}.");
@@ -70,6 +69,18 @@ public class AddUrlRequest() : AddFileRequest
         {
             throw new BadHttpRequestException($"Failed to fetch nzb-file url `{url}`: {ex.Message}");
         }
+    }
+
+    private static HttpClient GetHttpClient(string? customUserAgent)
+    {
+        var httpClient = new HttpClient();
+        var addedCustom = !string.IsNullOrWhiteSpace(customUserAgent)
+                          && httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", customUserAgent);
+        if (!addedCustom)
+        {
+            httpClient.DefaultRequestHeaders.Add("User-Agent", UserAgentHeader);
+        }
+        return httpClient;
     }
 
     private class NzbFileResponse

@@ -51,6 +51,21 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
             </Form.Group>
             <hr />
             <Form.Group>
+                <Form.Label htmlFor="user-agent-input">NZB Grabber User-Agent</Form.Label>
+                <Form.Control
+                    className={styles.input}
+                    type="text"
+                    id="user-agent-input"
+                    aria-describedby="user-agent-help"
+                    placeholder="Mozilla/5.0 ..."
+                    value={config["api.nzb-grab-user-agent"]}
+                    onChange={e => setNewConfig({ ...config, "api.nzb-grab-user-agent": e.target.value })} />
+                <Form.Text id="user-agent-help" muted>
+                    Optional custom User-Agent used when fetching NZB URLs from the API.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
                 <Form.Label htmlFor="mount-dir-input">Rclone Mount Directory</Form.Label>
                 <Form.Control
                     className={styles.input}
@@ -159,6 +174,7 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
 export function isSabnzbdSettingsUpdated(config: Record<string, string>, newConfig: Record<string, string>) {
     return config["api.key"] !== newConfig["api.key"]
         || config["api.categories"] !== newConfig["api.categories"]
+        || config["api.nzb-grab-user-agent"] !== newConfig["api.nzb-grab-user-agent"]
         || config["rclone.mount-dir"] !== newConfig["rclone.mount-dir"]
         || config["api.max-queue-connections"] !== newConfig["api.max-queue-connections"]
         || config["api.ensure-importable-video"] !== newConfig["api.ensure-importable-video"]

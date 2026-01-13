@@ -230,10 +230,15 @@ volumes:
     external: true # -- IMPORTANT --
 ```
 
+# Comprehensive Setup Guide
+
+If you'd like to get the most out of NzbDav, check out the [comprehensive guide](docs/setup-guide.md) for detailed instructions covering:
+* **Docker Compose:** Full stack with Rclone sidecar and healthchecks.
+* **Performance Tuning:** Benchmarking WebDAV connection limits.
+* **Integrations:** Automating Radarr/Sonarr queue management and repairs.
 
 # More screenshots
 <img width="300" alt="onboarding" src="https://github.com/user-attachments/assets/4ca1bfed-3b98-4ff2-8108-59ed07a25591" />
 <img width="300" alt="queue and history" src="https://github.com/user-attachments/assets/4f69f8dd-0dba-47b4-b02f-3e83ead293db" />
 <img width="300" alt="dav-explorer" src="https://github.com/user-attachments/assets/54a1d49b-8a8d-4306-bcda-9740bd5c9f52" />
 <img width="300" alt="health-page" src="https://github.com/user-attachments/assets/709b81c2-550b-47d0-ad50-65dc184cd3fa" />
-

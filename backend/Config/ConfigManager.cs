@@ -83,6 +83,12 @@ public class ConfigManager
                ?? "uncategorized";
     }
 
+    public string? GetNzbGrabUserAgent()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("api.nzb-grab-user-agent"))
+               ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("NZB_GRAB_USER_AGENT"));
+    }
+
     public int GetMaxConnections()
     {
         var providerConfig = GetConfigValue<UsenetProviderConfig>("usenet.providers");

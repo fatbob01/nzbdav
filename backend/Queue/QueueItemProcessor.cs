@@ -113,8 +113,12 @@ public class QueueItemProcessor(
         var documentBytes = Encoding.UTF8.GetBytes(queueNzbContents.NzbContents);
         using var stream = new MemoryStream(documentBytes);
         var nzb = await NzbDocument.LoadAsync(stream);
-        var archivePassword = nzb.MetaData.GetValueOrDefault("password")?.FirstOrDefault();
         var nzbFiles = nzb.Files.Where(x => x.Segments.Count > 0).ToList();
+
+        // Look for a password in filename and nzb document
+        // The file name's password takes priority, as an easy override
+        var archivePassword = FilenameUtil.GetNzbPassword(queueItem.FileName)
+                              ?? nzb.MetaData.GetValueOrDefault("password")?.FirstOrDefault();
 
         // part 1 -- get name and size of each nzb file
         var part1Progress = progress
