@@ -7,6 +7,7 @@ using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Queue;
+using NzbWebDAV.Utils;
 using NzbWebDAV.Websocket;
 using Usenet.Nzb;
 
