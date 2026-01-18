@@ -35,13 +35,14 @@ public class MigrateLibrarySymlinksTask(
             foreach (var file in allFiles)
             {
                 var fileInfo = new FileInfo(file);
+                var resolvedLinkTarget = fileInfo.LinkTarget is null ? null : ResolveLinkTargetPath(fileInfo);
                 var isOldSymlink = fileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint)
-                                   && fileInfo.LinkTarget is not null
-                                   && fileInfo.LinkTarget!.StartsWith(
+                                   && resolvedLinkTarget is not null
+                                   && resolvedLinkTarget.StartsWith(
                                        Path.Combine(mountDir, DavItem.ContentFolder.Name));
                 if (isOldSymlink)
                 {
-                    await UpdateSymlink(fileInfo, mountDir);
+                    await UpdateSymlink(fileInfo, mountDir, resolvedLinkTarget!);
                     retargetted++;
                 }
 
@@ -61,9 +62,11 @@ public class MigrateLibrarySymlinksTask(
         }
     }
 
-    private async Task UpdateSymlink(FileInfo oldSymlink, string mountDir)
+    private async Task UpdateSymlink(FileInfo oldSymlink, string mountDir, string resolvedLinkTarget)
     {
-        var davPath = oldSymlink.LinkTarget!.RemovePrefix(mountDir).RemovePrefix("/");
+        var davPath = resolvedLinkTarget
+            .RemovePrefix(mountDir)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var storeItem = await store.GetItemAsync(davPath, default);
         var davItem = storeItem switch
         {
@@ -82,5 +85,11 @@ public class MigrateLibrarySymlinksTask(
         var newPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
         if (oldSymlink.Exists) oldSymlink.Delete();
         oldSymlink.CreateAsSymbolicLink(newPath);
+    }
+
+    private static string ResolveLinkTargetPath(FileInfo fileInfo)
+    {
+        return fileInfo.ResolveLinkTarget(true)?.FullName
+               ?? Path.GetFullPath(fileInfo.LinkTarget!, fileInfo.DirectoryName!);
     }
 }
