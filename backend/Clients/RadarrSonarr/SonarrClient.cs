@@ -70,7 +70,7 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         if (SymlinkToEpisodeFileIdCache.TryGetValue(symlinkPath, out var episodeFileId))
         {
             var episodeFile = await GetEpisodeFile(episodeFileId);
-            if (PathUtil.AreSamePath(episodeFile.Path!, symlinkPath)) return episodeFileId;
+            if (episodeFile.Path == symlinkPath) return episodeFileId;
         }
 
         // otherwise, find the series-id
@@ -82,7 +82,7 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         foreach (var episodeFile in await GetAllEpisodeFiles(seriesId.Value))
         {
             SymlinkToEpisodeFileIdCache[episodeFile.Path!] = episodeFile.Id;
-            if (PathUtil.AreSamePath(episodeFile.Path!, symlinkPath))
+            if (episodeFile.Path == symlinkPath)
                 result = episodeFile.Id;
         }
 
@@ -103,7 +103,7 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         if (cachedSeriesId != null)
         {
             var series = await GetSeries(cachedSeriesId.Value);
-            if (PathUtil.IsSubPath(series.Path!, symlinkPath))
+            if (symlinkPath.StartsWith(series.Path!))
                 return
                     cachedSeriesId;
         }
@@ -113,7 +113,7 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         foreach (var series in await GetAllSeries())
         {
             SeriesPathToSeriesIdCache[series.Path!] = series.Id;
-            if (PathUtil.IsSubPath(series.Path!, symlinkPath))
+            if (symlinkPath.StartsWith(series.Path!))
                 result = series.Id;
         }
 
