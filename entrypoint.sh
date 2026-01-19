@@ -47,6 +47,10 @@ if getent group $PGID >/dev/null 2>&1; then
     # GID already exists, use that group
     GROUP_NAME=$(getent group $PGID | cut -d: -f1)
     echo "Using existing group '$GROUP_NAME' with GID $PGID"
+elif getent group appgroup >/dev/null 2>&1; then
+    # Group name exists already, reuse it
+    GROUP_NAME=appgroup
+    echo "Using existing group 'appgroup'"
 else
     # GID doesn't exist, create appgroup with this GID
     addgroup -g "$PGID" appgroup
