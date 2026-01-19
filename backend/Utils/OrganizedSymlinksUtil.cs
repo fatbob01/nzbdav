@@ -77,37 +77,13 @@ public static class OrganizedSymlinksUtil
     )
     {
         var mountDir = configManager.GetRcloneMountDir();
-        var normalizedMountDir = NormalizePath(mountDir);
-        var comparison = GetPathComparison();
-        var mountPrefix = normalizedMountDir.EndsWith(Path.DirectorySeparatorChar)
-            ? normalizedMountDir
-            : normalizedMountDir + Path.DirectorySeparatorChar;
-
         return symlinkInfos
-            .Select(x => x with { TargetPath = NormalizePath(x.TargetPath) })
-            .Where(x => x.TargetPath.StartsWith(mountPrefix, comparison))
-            .Select(x => x with { TargetPath = x.TargetPath[mountPrefix.Length..] })
-            .Select(x => x with { TargetPath = x.TargetPath.TrimStart(Path.DirectorySeparatorChar) })
-            .Where(x =>
-            {
-                var separatorIndex = x.TargetPath.IndexOf(Path.DirectorySeparatorChar);
-                var firstSegment = separatorIndex >= 0 ? x.TargetPath[..separatorIndex] : x.TargetPath;
-                return string.Equals(firstSegment, ".ids", comparison);
-            })
+            .Where(x => x.TargetPath.StartsWith(mountDir))
+            .Select(x => x with { TargetPath = x.TargetPath.RemovePrefix(mountDir) })
+            .Select(x => x with { TargetPath = x.TargetPath.StartsWith('/') ? x.TargetPath : $"/{x.TargetPath}" })
+            .Where(x => x.TargetPath.StartsWith("/.ids"))
             .Select(x => x with { TargetPath = Path.GetFileNameWithoutExtension(x.TargetPath) })
             .Select(x => new DavItemSymlink() { SymlinkPath = x.SymlinkPath, DavItemId = Guid.Parse(x.TargetPath) });
-    }
-
-    private static string NormalizePath(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var normalized = fullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        return normalized.TrimEnd(Path.DirectorySeparatorChar);
-    }
-
-    private static StringComparison GetPathComparison()
-    {
-        return OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     }
 
     public struct DavItemSymlink
