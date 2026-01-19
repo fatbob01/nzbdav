@@ -43,13 +43,23 @@ PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
 # Create group if it doesn't exist
-if ! getent group appgroup >/dev/null; then
+if getent group $PGID >/dev/null 2>&1; then
+    # GID already exists, use that group
+    GROUP_NAME=$(getent group $PGID | cut -d: -f1)
+    echo "Using existing group '$GROUP_NAME' with GID $PGID"
+elif getent group appgroup >/dev/null 2>&1; then
+    # Group name exists already, reuse it
+    GROUP_NAME=appgroup
+    echo "Using existing group 'appgroup'"
+else
+    # GID doesn't exist, create appgroup with this GID
     addgroup -g "$PGID" appgroup
+    GROUP_NAME=appgroup
 fi
 
 # Create user if it doesn't exist
 if ! id appuser >/dev/null 2>&1; then
-    adduser -D -H -u "$PUID" -G appgroup appuser
+    adduser -D -H -u "$PUID" -G $GROUP_NAME appuser
 fi
 
 # Set environment variables
