@@ -72,7 +72,13 @@ if [ -z "${FRONTEND_BACKEND_API_KEY}" ]; then
 fi
 
 # Change permissions on /config directory to the given PUID and PGID
-chown $PUID:$PGID /config
+chown -R $PUID:$PGID /config
+
+# Ensure data-protection keys are accessible
+if [ -d "/config/data-protection" ]; then
+    chown -R $PUID:$PGID /config/data-protection
+    chmod -R 755 /config/data-protection
+fi
 
 # Run backend database migration
 cd /app/backend
