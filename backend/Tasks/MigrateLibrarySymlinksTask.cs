@@ -20,6 +20,7 @@ public class MigrateLibrarySymlinksTask(
         {
             // read config
             var mountDir = configManager.GetRcloneMountDir();
+            var normalizedMountDir = NormalizeMountDir(mountDir);
             var libraryDir = configManager.GetLibraryDir();
             if (libraryDir is null)
                 throw new InvalidOperationException("The library directory must first be configured.");
@@ -35,13 +36,21 @@ public class MigrateLibrarySymlinksTask(
             foreach (var file in allFiles)
             {
                 var fileInfo = new FileInfo(file);
+                var resolvedLinkTarget = fileInfo.LinkTarget is null ? null : ResolveLinkTargetPath(fileInfo);
+                var normalizedResolvedLinkTarget = resolvedLinkTarget is null
+                    ? null
+                    : NormalizePath(resolvedLinkTarget);
                 var isOldSymlink = fileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint)
-                                   && fileInfo.LinkTarget is not null
-                                   && fileInfo.LinkTarget!.StartsWith(
-                                       Path.Combine(mountDir, DavItem.ContentFolder.Name));
+                                   && normalizedResolvedLinkTarget is not null
+                                   && normalizedResolvedLinkTarget.StartsWith(
+                                       Path.Combine(normalizedMountDir, DavItem.ContentFolder.Name));
                 if (isOldSymlink)
                 {
-                    await UpdateSymlink(fileInfo, mountDir);
+                    await UpdateSymlink(
+                        fileInfo,
+                        mountDir,
+                        normalizedMountDir,
+                        normalizedResolvedLinkTarget!);
                     retargetted++;
                 }
 
@@ -61,9 +70,15 @@ public class MigrateLibrarySymlinksTask(
         }
     }
 
-    private async Task UpdateSymlink(FileInfo oldSymlink, string mountDir)
+    private async Task UpdateSymlink(
+        FileInfo oldSymlink,
+        string mountDir,
+        string normalizedMountDir,
+        string normalizedResolvedLinkTarget)
     {
-        var davPath = oldSymlink.LinkTarget!.RemovePrefix(mountDir).RemovePrefix("/");
+        var davPath = normalizedResolvedLinkTarget
+            .RemovePrefix(normalizedMountDir)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var storeItem = await store.GetItemAsync(davPath, default);
         var davItem = storeItem switch
         {
@@ -82,5 +97,30 @@ public class MigrateLibrarySymlinksTask(
         var newPath = DatabaseStoreSymlinkFile.GetTargetPath(davItem, mountDir);
         if (oldSymlink.Exists) oldSymlink.Delete();
         oldSymlink.CreateAsSymbolicLink(newPath);
+    }
+
+    private static string ResolveLinkTargetPath(FileInfo fileInfo)
+    {
+        return fileInfo.ResolveLinkTarget(true)?.FullName
+               ?? Path.GetFullPath(fileInfo.LinkTarget!, fileInfo.DirectoryName!);
+    }
+
+    private static string NormalizeMountDir(string mountDir)
+    {
+        var resolved = new DirectoryInfo(mountDir).ResolveLinkTarget(true)?.FullName ?? mountDir;
+        return NormalizePath(resolved);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath);
+        if (!string.IsNullOrEmpty(root)
+            && string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return fullPath;
+        }
+
+        return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 }
