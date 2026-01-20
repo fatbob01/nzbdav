@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using NzbWebDAV.Clients.RadarrSonarr.BaseModels;
 using NzbWebDAV.Clients.RadarrSonarr.RadarrModels;
+using NzbWebDAV.Utils;
 
 namespace NzbWebDAV.Clients.RadarrSonarr;
 
@@ -43,7 +44,8 @@ public class RadarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         if (SymlinkToMovieIdCache.TryGetValue(symlinkPath, out var movieId))
         {
             var movie = await GetMovieAsync(movieId);
-            if (movie.MovieFile?.Path == symlinkPath)
+            if (movie.MovieFile?.Path != null
+                && PathUtil.AreSamePath(movie.MovieFile.Path, symlinkPath))
                 return (movie.MovieFile.Id!, movieId);
         }
 
@@ -56,7 +58,8 @@ public class RadarrClient(string host, string apiKey) : ArrClient(host, apiKey)
             var movieFile = movie.MovieFile;
             if (movieFile?.Path != null)
                 SymlinkToMovieIdCache[movieFile.Path] = movie.Id;
-            if (movieFile?.Path == symlinkPath)
+            if (movieFile?.Path != null
+                && PathUtil.AreSamePath(movieFile.Path, symlinkPath))
                 result = (movieFile.Id!, movie.Id);
         }
 
