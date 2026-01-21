@@ -17,7 +17,8 @@ public class GetFullStatusController(
         {
             Status = new GetFullStatusResponse.FullStatusObject()
             {
-                CompleteDir = Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name),
+                CompleteDir = configManager.GetSymlinkMirrorDir()
+                              ?? Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name),
             }
         };
 
