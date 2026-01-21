@@ -30,6 +30,13 @@ public class DatabaseStoreCollection(
 
     protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
     {
+        if (davDirectory.Id == DavItem.Root.Id && request.Name == "symlinks")
+        {
+            var mirrorDir = configManager.GetSymlinkMirrorDir();
+            if (!string.IsNullOrWhiteSpace(mirrorDir))
+                return new FileSystemStoreCollection("symlinks", mirrorDir);
+        }
+
         if (davDirectory.Id == DavItem.Root.Id && request.Name == Readme.Name) return Readme;
         var child = await dbClient.GetDirectoryChildAsync(davDirectory.Id, request.Name, request.CancellationToken)
             .ConfigureAwait(false);
@@ -49,7 +56,12 @@ public class DatabaseStoreCollection(
 
         // include the readme file
         if (davDirectory.Id == DavItem.Root.Id)
+        {
+            var mirrorDir = configManager.GetSymlinkMirrorDir();
+            if (!string.IsNullOrWhiteSpace(mirrorDir))
+                result = result.Append(new FileSystemStoreCollection("symlinks", mirrorDir));
             result = result.Append(Readme);
+        }
 
         return result.ToArray();
     }
