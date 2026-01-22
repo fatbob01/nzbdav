@@ -24,8 +24,9 @@ public class GetConfigController(
         var root = JsonNode.Parse(config)!;
 
         // update the complete_dir
-        var completeDir = !string.IsNullOrWhiteSpace(configManager.GetSymlinkMirrorDir())
-            ? Path.Join(configManager.GetRcloneMountDir(), "symlinks")
+        var symlinkMirrorDir = configManager.GetSymlinkMirrorDir();
+        var completeDir = !string.IsNullOrWhiteSpace(symlinkMirrorDir)
+            ? symlinkMirrorDir
             : Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name);
         root["config"]!["misc"]!["complete_dir"] = completeDir;
 
