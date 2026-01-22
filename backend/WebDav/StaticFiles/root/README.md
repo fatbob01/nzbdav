@@ -10,13 +10,19 @@ However, files can be deleted from this directory if you no longer want them, us
 
 ---
 
-# About `/symlinks`
+# About `/completed-symlinks`
 
-When the Symlink Mirror Directory setting is configured, this directory exposes real filesystem symlinks created by nzbdav. These symlinks point to items under `/content`, so Arrs can import from `/symlinks/...` and land on the real streamable files.
+This directory contains symlinks for items that have finished processing the nzbdav queue and are still present in the nzbdav history table.
 
-This folder mirrors the local symlink mirror directory you configured (for example `/symlinks` inside the container).
+It is read-only. Files cannot be created, renamed, moved, or deleted from this directory. Files in this directory can only be read and copied out of the webdav.
 
-> Legacy note: if you are not using the mirror, the older `/completed-symlinks` tree uses `*.rclonelink` files and requires `rclone --links` to translate them into symlinks.
+All items under this directory have the *.rclonelink extension, since true symlinks cannot exist on a webdav. Instead, the *.rclonelink files are simple text files whose contents contain the target path of where the symlink should point to.
+
+If using Rclone to mount the webdav onto your filesystem, then Rclone will take care of translating these *.rclonelink files to actual symlinks. You'll need to use the `--links` argument for Rclone to perform this translation.
+
+> NOTE: Be sure to use an updated version of rclone that supports the `--links` argument.
+> * Version `v1.70.3` has been known to support it.
+> * Version `v1.60.1-DEV` has been known _not_ to support it.
 
 ---
 
