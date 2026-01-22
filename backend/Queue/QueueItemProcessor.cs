@@ -369,7 +369,22 @@ public class QueueItemProcessor(
             if (IsSymlinkUpToDate(mirrorPath, targetPath)) return Task.CompletedTask;
 
             DeleteExistingPath(mirrorPath);
-            Directory.CreateSymbolicLink(mirrorPath, targetPath);
+
+            if (File.Exists(targetPath))
+            {
+                File.CreateSymbolicLink(mirrorPath, targetPath);
+            }
+            else if (Directory.Exists(targetPath))
+            {
+                Directory.CreateSymbolicLink(mirrorPath, targetPath);
+            }
+            else
+            {
+                Log.Warning(
+                    "Mirror symlink target path `{TargetPath}` does not exist for job `{JobName}`.",
+                    targetPath,
+                    queueItem.JobName);
+            }
         }
         catch (Exception e)
         {
