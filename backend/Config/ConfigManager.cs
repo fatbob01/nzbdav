@@ -64,6 +64,14 @@ public class ConfigManager
                ?? "/tmp";
     }
 
+    public string? GetSymlinkMirrorTargetDir()
+    {
+        return StringUtil.EmptyToNull(GetConfigValue("symlink.mirror-target-dir"))
+               ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("SYMLINK_MIRROR_TARGET_DIR"))
+               ?? StringUtil.EmptyToNull(GetConfigValue("rclone.mount-dir"))
+               ?? StringUtil.EmptyToNull(Environment.GetEnvironmentVariable("MOUNT_DIR"));
+    }
+
     public string GetApiKey()
     {
         return StringUtil.EmptyToNull(GetConfigValue("api.key"))

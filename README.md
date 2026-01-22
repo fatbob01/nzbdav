@@ -118,6 +118,7 @@ Once you have the webdav mounted onto your filesystem (e.g. accessible at `/mnt/
 * Plex accesses one of the symlinks from your media library, it will automatically fetch and stream it from the mounted webdav.
 * If you enable the Symlink Mirror Directory setting, it is exposed on the WebDAV root as `/symlinks` for real filesystem symlinks.
 * Example (Windows): expose `/symlinks` in WebDAV so Arrs can import from `C:\\nzbdav\\mount\\symlinks\\...` with `rclone.mount-dir = C:\\nzbdav\\mount` and `symlink.mirror-dir = /symlinks`.
+* If the rclone mount path is not local to the nzbdav host, set `symlink.mirror-target-dir` (or `SYMLINK_MIRROR_TARGET_DIR`) to the local mount path so nzbdav can create real symlinks that resolve correctly.
 
 
 # Example Docker Compose Setup

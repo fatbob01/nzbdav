@@ -107,6 +107,7 @@ Set your username and password.
 * **Enforce Read-Only:** Uncheck it if you'd like to delete files from terminal. Otherwise, leave it checked.
 * **Symlink Mirror Directory (Optional):** Configure a local path for real filesystem symlinks; it is exposed on the WebDAV root as `/symlinks`.
   * Example (Windows): with `rclone.mount-dir = C:\\nzbdav\\mount` and `symlink.mirror-dir = /symlinks`, Arrs can import from `C:\\nzbdav\\mount\\symlinks\\movies` and `C:\\nzbdav\\mount\\symlinks\\tv`.
+  * If the rclone mount lives on another machine, set `symlink.mirror-target-dir` (or `SYMLINK_MIRROR_TARGET_DIR`) to a local mount path on the nzbdav host so the mirror symlinks resolve correctly.
 
 ### 3. Speed Tuning (Optional)
 

@@ -16,6 +16,8 @@ When the Symlink Mirror Directory setting is configured, this directory exposes 
 
 This folder mirrors the local symlink mirror directory you configured (for example `/symlinks` inside the container).
 
+If your rclone mount directory is on another machine, set `symlink.mirror-target-dir` (or `SYMLINK_MIRROR_TARGET_DIR`) to a local mount path on the nzbdav host so the symlink targets resolve.
+
 > Legacy note: if you are not using the mirror, the older `/completed-symlinks` tree uses `*.rclonelink` files and requires `rclone --links` to translate them into symlinks.
 
 ---
