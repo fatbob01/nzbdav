@@ -91,7 +91,7 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
                     value={config["symlink.mirror-dir"]}
                     onChange={e => setNewConfig({ ...config, "symlink.mirror-dir": e.target.value })} />
                 <Form.Text id="symlink-mirror-dir-help" muted>
-                    Optional path where nzbdav will create real filesystem symlinks for completed downloads. Leave blank to disable.
+                    Optional local path where nzbdav will create real filesystem symlinks for completed downloads (for example, /symlinks inside the container). Exposed over WebDAV as /symlinks so Arrs can import from C:\nzbdav\mount\symlinks\...
                 </Form.Text>
             </Form.Group>
             <hr />

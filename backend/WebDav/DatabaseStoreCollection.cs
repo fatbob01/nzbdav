@@ -23,6 +23,7 @@ public class DatabaseStoreCollection(
     WebsocketManager websocketManager
 ) : BaseStoreReadonlyCollection
 {
+    private const string SymlinkMirrorName = "symlinks";
     public override string Name => davDirectory.Name;
     public override string UniqueKey => davDirectory.Id.ToString();
     public override DateTime CreatedAt => davDirectory.CreatedAt;
@@ -30,11 +31,16 @@ public class DatabaseStoreCollection(
 
     protected override async Task<IStoreItem?> GetItemAsync(GetItemRequest request)
     {
-        if (davDirectory.Id == DavItem.Root.Id && request.Name == "symlinks")
+        if (davDirectory.Id == DavItem.Root.Id && request.Name == SymlinkMirrorName)
         {
-            var mirrorDir = configManager.GetSymlinkMirrorDir();
-            if (!string.IsNullOrWhiteSpace(mirrorDir))
-                return new FileSystemStoreCollection("symlinks", mirrorDir);
+            return GetSymlinkMirrorCollection(request.Name);
+        }
+
+        if (davDirectory.Id == DavItem.Root.Id
+            && request.Name == DavItem.SymlinkFolder.Name
+            && IsSymlinkMirrorEnabled())
+        {
+            return null;
         }
 
         if (davDirectory.Id == DavItem.Root.Id && request.Name == Readme.Name) return Readme;
@@ -47,9 +53,14 @@ public class DatabaseStoreCollection(
     protected override async Task<IStoreItem[]> GetAllItemsAsync(CancellationToken cancellationToken)
     {
         // read DavItems from the database
-        var children = await dbClient
+        var children = (await dbClient
             .GetDirectoryChildrenAsync(davDirectory.Id, cancellationToken)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false)).AsEnumerable();
+
+        if (davDirectory.Id == DavItem.Root.Id && IsSymlinkMirrorEnabled())
+        {
+            children = children.Where(child => child.Id != DavItem.SymlinkFolder.Id);
+        }
 
         // map DavItems to IStoreItems
         var result = children.Select(GetItem);
@@ -59,7 +70,9 @@ public class DatabaseStoreCollection(
         {
             var mirrorDir = configManager.GetSymlinkMirrorDir();
             if (!string.IsNullOrWhiteSpace(mirrorDir))
-                result = result.Append(new FileSystemStoreCollection("symlinks", mirrorDir));
+            {
+                result = result.Append(new FileSystemStoreCollection(SymlinkMirrorName, mirrorDir));
+            }
             result = result.Append(Readme);
         }
 
@@ -133,5 +146,17 @@ public class DatabaseStoreCollection(
                     davItem, httpContext, dbClient, usenetClient, configManager),
             _ => throw new ArgumentException("Unrecognized directory child type.")
         };
+    }
+
+    private FileSystemStoreCollection? GetSymlinkMirrorCollection(string name)
+    {
+        var mirrorDir = configManager.GetSymlinkMirrorDir();
+        if (string.IsNullOrWhiteSpace(mirrorDir)) return null;
+        return new FileSystemStoreCollection(name, mirrorDir);
+    }
+
+    private bool IsSymlinkMirrorEnabled()
+    {
+        return !string.IsNullOrWhiteSpace(configManager.GetSymlinkMirrorDir());
     }
 }

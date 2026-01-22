@@ -46,6 +46,7 @@ app.use(async (req, res, next) => {
     || req.path.startsWith("/.ids")
     || req.path.startsWith("/nzbs")
     || req.path.startsWith("/content")
+    || req.path.startsWith("/symlinks")
     || req.path.startsWith("/completed-symlinks")
   ) {
     await setApiKeyForAuthenticatedRequests(req);

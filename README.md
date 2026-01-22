@@ -112,10 +112,12 @@ Once you have the webdav mounted onto your filesystem (e.g. accessible at `/mnt/
 * Radar will send an *.nzb to NZB-Dav to "download"
 * NZB-Dav will mount the nzb onto the webdav without actually downloading it.
 * RClone will make the nzb contents available to your filesystem by streaming, without using any storage space on your server.
-* NZB-Dav will tell Radarr that the "download" has completed within the `/mnt/nzbdav/completed-symlinks` folder.
-* Radarr will grab the symlinks from `/mnt/nzbdav/completed-symlinks` and will move them to wherever you have your media library.
-* The symlinks always point to the `/mnt/nzbdav/.ids` folder which contains the streamable content.
+* NZB-Dav will tell Radarr that the "download" has completed within the `/mnt/nzbdav/symlinks` folder.
+* Radarr will grab the symlinks from `/mnt/nzbdav/symlinks` and will move them to wherever you have your media library.
+* The symlinks always point to the `/mnt/nzbdav/content` folder which contains the streamable content.
 * Plex accesses one of the symlinks from your media library, it will automatically fetch and stream it from the mounted webdav.
+* If you enable the Symlink Mirror Directory setting, it is exposed on the WebDAV root as `/symlinks` for real filesystem symlinks.
+* Example (Windows): expose `/symlinks` in WebDAV so Arrs can import from `C:\\nzbdav\\mount\\symlinks\\...` with `rclone.mount-dir = C:\\nzbdav\\mount` and `symlink.mirror-dir = /symlinks`.
 
 
 # Example Docker Compose Setup
