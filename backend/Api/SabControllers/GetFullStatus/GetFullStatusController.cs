@@ -13,15 +13,13 @@ public class GetFullStatusController(
     protected override Task<IActionResult> Handle()
     {
         // mimic sabnzbd fullstatus
-        var symlinkMirrorDir = configManager.GetSymlinkMirrorDir();
-        var completeDir = !string.IsNullOrWhiteSpace(symlinkMirrorDir)
-            ? symlinkMirrorDir
-            : Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name);
         var status = new GetFullStatusResponse()
         {
             Status = new GetFullStatusResponse.FullStatusObject()
             {
-                CompleteDir = completeDir,
+                CompleteDir = configManager.GetSymlinkMirrorDir() is not null
+                    ? Path.Join(configManager.GetRcloneMountDir(), "symlinks")
+                    : Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name),
             }
         };
 
