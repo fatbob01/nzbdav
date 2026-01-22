@@ -32,7 +32,6 @@ const defaultConfig = {
     "webdav.enforce-readonly": "true",
     "webdav.preview-par2-files": "false",
     "rclone.mount-dir": "",
-    "symlink.mirror-dir": "",
     "media.library-dir": "",
     "arr.instances": "{\"RadarrInstances\":[],\"SonarrInstances\":[],\"QueueRules\":[]}",
     "repair.connections": "",

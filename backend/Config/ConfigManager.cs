@@ -240,12 +240,6 @@ public class ConfigManager
         var defaultValue = ".nfo, .par2, .sfv";
         return GetConfigValue("api.download-extension-blacklist") ?? defaultValue;
     }
-
-    public string? GetSymlinkMirrorDir()
-    {
-        return StringUtil.EmptyToNull(GetConfigValue("symlink.mirror-dir"));
-    }
-
     public class ConfigEventArgs : EventArgs
     {
         public Dictionary<string, string> ChangedConfig { get; set; } = new();

@@ -81,21 +81,6 @@ export function SabnzbdSettings({ config, setNewConfig }: SabnzbdSettingsProps) 
             </Form.Group>
             <hr />
             <Form.Group>
-                <Form.Label htmlFor="symlink-mirror-dir-input">Mirror Symlink Directory</Form.Label>
-                <Form.Control
-                    className={styles.input}
-                    type="text"
-                    id="symlink-mirror-dir-input"
-                    aria-describedby="symlink-mirror-dir-help"
-                    placeholder="/symlinks"
-                    value={config["symlink.mirror-dir"]}
-                    onChange={e => setNewConfig({ ...config, "symlink.mirror-dir": e.target.value })} />
-                <Form.Text id="symlink-mirror-dir-help" muted>
-                    Optional path where nzbdav will create real filesystem symlinks for completed downloads. Leave blank to disable.
-                </Form.Text>
-            </Form.Group>
-            <hr />
-            <Form.Group>
                 <Form.Label htmlFor="max-queue-connections-input">Max Connections for Queue Processing</Form.Label>
                 <Form.Control
                     {...className([styles.input, !isValidQueueConnections(config["api.max-queue-connections"]) && styles.error])}
@@ -191,7 +176,6 @@ export function isSabnzbdSettingsUpdated(config: Record<string, string>, newConf
         || config["api.categories"] !== newConfig["api.categories"]
         || config["api.nzb-grab-user-agent"] !== newConfig["api.nzb-grab-user-agent"]
         || config["rclone.mount-dir"] !== newConfig["rclone.mount-dir"]
-        || config["symlink.mirror-dir"] !== newConfig["symlink.mirror-dir"]
         || config["api.max-queue-connections"] !== newConfig["api.max-queue-connections"]
         || config["api.ensure-importable-video"] !== newConfig["api.ensure-importable-video"]
         || config["api.ensure-article-existence"] !== newConfig["api.ensure-article-existence"]
