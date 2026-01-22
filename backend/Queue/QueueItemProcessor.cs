@@ -370,24 +370,20 @@ public class QueueItemProcessor(
 
             DeleteExistingPath(mirrorPath);
 
-            var targetIsFile = File.Exists(targetPath);
-            var targetIsDirectory = Directory.Exists(targetPath);
-
-            if (targetIsFile)
+            if (File.Exists(targetPath))
             {
                 File.CreateSymbolicLink(mirrorPath, targetPath);
             }
-            else if (targetIsDirectory)
+            else if (Directory.Exists(targetPath))
             {
                 Directory.CreateSymbolicLink(mirrorPath, targetPath);
             }
             else
             {
                 Log.Warning(
-                    "Mirror symlink target path does not exist. Skipping symlink creation for `{JobName}`. Mirror: `{MirrorPath}` Target: `{TargetPath}`.",
-                    queueItem.JobName,
-                    mirrorPath,
-                    targetPath);
+                    "Mirror symlink target path `{TargetPath}` does not exist for job `{JobName}`.",
+                    targetPath,
+                    queueItem.JobName);
             }
         }
         catch (Exception e)
