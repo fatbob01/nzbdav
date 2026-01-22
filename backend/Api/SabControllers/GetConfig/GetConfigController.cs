@@ -26,10 +26,7 @@ public class GetConfigController(
         // update the complete_dir
         var symlinkMirrorDir = configManager.GetSymlinkMirrorDir();
         var completeDir = !string.IsNullOrWhiteSpace(symlinkMirrorDir)
-            ? Path.Join(
-                configManager.GetRcloneMountDir(),
-                Path.GetFileName(symlinkMirrorDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            )
+            ? symlinkMirrorDir
             : Path.Join(configManager.GetRcloneMountDir(), DavItem.SymlinkFolder.Name);
         root["config"]!["misc"]!["complete_dir"] = completeDir;
 
