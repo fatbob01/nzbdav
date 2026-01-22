@@ -358,8 +358,10 @@ public class QueueItemProcessor(
                 : mountFolder.Name;
 
             var mirrorPath = Path.Join(mirrorDir, queueItem.Category, relativeContentPath);
+            var mirrorTargetDir = configManager.GetSymlinkMirrorTargetDir();
+            if (string.IsNullOrWhiteSpace(mirrorTargetDir)) return Task.CompletedTask;
             var targetPath = Path.Join(
-                configManager.GetRcloneMountDir(),
+                mirrorTargetDir,
                 mountPath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
             var mirrorParent = Path.GetDirectoryName(mirrorPath);
@@ -384,7 +386,7 @@ public class QueueItemProcessor(
             else
             {
                 Log.Warning(
-                    "Mirror symlink target path does not exist. Skipping symlink creation for `{JobName}`. Mirror: `{MirrorPath}` Target: `{TargetPath}`.",
+                    "Mirror symlink target path does not exist. Skipping symlink creation for `{JobName}`. Mirror: `{MirrorPath}` Target: `{TargetPath}`. Configure `symlink.mirror-target-dir` if your rclone mount lives elsewhere.",
                     queueItem.JobName,
                     mirrorPath,
                     targetPath);
