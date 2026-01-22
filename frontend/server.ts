@@ -21,6 +21,7 @@ app.use(
         path.startsWith("/.ids") ||
         path.startsWith("/nzbs") ||
         path.startsWith("/content") ||
+        path.startsWith("/symlinks") ||
         path.startsWith("/completed-symlinks") ||
         path.startsWith("/api")
       ) {

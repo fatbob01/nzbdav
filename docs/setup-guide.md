@@ -8,8 +8,8 @@ Before configuring, it helps to understand the flow:
 ### Path A: The Automation Flow (Radarr/Sonarr + Plex/Jellyfin)
 1. **Radarr** sends an `.nzb` file to NzbDav (acting as a download client) to "download".
 2. **NzbDav** mounts the nzb onto the webdav without actually downloading it.
-3. **NzbDav** tells Radarr the "download" is finished and points to a folder of **Symlinks** at `/mnt/remote/nzbdav/completed-symlinks`.
-    * The **Symlinks** always point to the `/mnt/remote/nzbdav/.ids` folder which contains the streamable content.
+3. **NzbDav** tells Radarr the "download" is finished and points to a folder of **Symlinks** at `/mnt/remote/nzbdav/symlinks`.
+    * The **Symlinks** always point to the `/mnt/remote/nzbdav/content` folder which contains the streamable content.
 4. **Radarr** imports these Symlinks into your library. For eg: `/mnt/media/movies`.
 5. **Plex** reads the Symlink -> Rclone Mount -> WebDAV Stream -> Usenet Provider.
     * **RClone** will make the nzb contents available to your filesystem by streaming, without using any storage space on your server.
@@ -105,6 +105,8 @@ Set your username and password.
 
 * **Set WebDAV Password:** Create a password (you will need this for Rclone).
 * **Enforce Read-Only:** Uncheck it if you'd like to delete files from terminal. Otherwise, leave it checked.
+* **Symlink Mirror Directory (Optional):** Configure a local path for real filesystem symlinks; it is exposed on the WebDAV root as `/symlinks`.
+  * Example (Windows): with `rclone.mount-dir = C:\\nzbdav\\mount` and `symlink.mirror-dir = /symlinks`, Arrs can import from `C:\\nzbdav\\mount\\symlinks\\movies` and `C:\\nzbdav\\mount\\symlinks\\tv`.
 
 ### 3. Speed Tuning (Optional)
 
@@ -232,7 +234,7 @@ $ docker compose up -d --force-recreate nzbdav_rclone
 Check out the mount is working
 ```bash
 ls -la /mnt/remote/nzbdav
-# Should show: .ids, completed-symlinks, content, nzbs
+# Should show: .ids, content, nzbs, symlinks
 ```
 
 #### Understanding the Flags
@@ -349,5 +351,3 @@ In the AIOStreams UI:
 ### 3. Install to Stremio
 
 Go to the **Save & Install** tab, click **Save**, and then install the addon to Stremio.
-
-
